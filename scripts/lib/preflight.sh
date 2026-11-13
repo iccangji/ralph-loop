@@ -2,24 +2,18 @@
 # Preflight module for ralph.sh
 # Pre-flight checks before starting the main loop
 # Dependencies: constants.sh, logging.sh
-#
-# Verify required files exist before starting the main loop.
-# Required files cause script exit if missing.
-# Optional files trigger a warning but allow continuation.
 
-# Check if running inside a git repository
+# Check if workspace is a git repository
 # Usage: check_git_repo
-# Exits with code 1 if not in a git repository
 check_git_repo() {
-  if ! git rev-parse --git-dir > /dev/null 2>&1; then
-    log_error "ralph.sh must be run inside a git repository"
+  if [ ! -d "$SCRIPT_DIR/workspace/.git" ]; then
+    log_error "workspace directory ($SCRIPT_DIR/workspace) is not a git repository. Run 'git init' inside it first."
     exit 1
   fi
 }
 
 # Ensure history directory exists for storing iteration logs
 # Usage: check_history_dir
-# Creates .agent/history/ directory if it doesn't exist
 check_history_dir() {
   mkdir -p "$HISTORY_DIR"
   if [ ! -d "$HISTORY_DIR" ]; then
@@ -33,7 +27,6 @@ check_history_dir() {
 check_required_files() {
   local missing_required=false
 
-  # Required files - exit if missing
   if [ ! -f "$SCRIPT_DIR/.agent/tasks.json" ]; then
     log_error "Required file missing: .agent/tasks.json"
     missing_required=true
@@ -44,13 +37,16 @@ check_required_files() {
     missing_required=true
   fi
 
-  # Exit if any required files are missing
+  if [ ! -f "$SCRIPT_DIR/.pi/models.json" ]; then
+    log_error "Required file missing: .pi/models.json"
+    missing_required=true
+  fi
+
   if [ "$missing_required" = true ]; then
     log_error "Please create the required files before running Ralph"
     exit 1
   fi
 
-  # Optional files - warn if missing but continue
   if [ ! -f "$SCRIPT_DIR/.agent/prd/SUMMARY.md" ]; then
     log_warn "Optional file missing: .agent/prd/SUMMARY.md"
   fi

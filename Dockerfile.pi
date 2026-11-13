@@ -20,9 +20,12 @@ RUN apt-get update \
 RUN npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@${PI_VERSION}"
 
 # Writable home and agent dir for the mapped host user
-RUN mkdir -p /home/pi /pi-agent \
-  && chmod 0777 /home/pi /pi-agent
+RUN mkdir -p /home/pi /pi-agent /pi-config \
+  && chmod 0777 /home/pi /pi-agent /pi-config
+
+COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 ENV HOME=/home/pi
 WORKDIR /workspace
-ENTRYPOINT ["pi"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

@@ -1,16 +1,10 @@
 #!/bin/bash
 # Docker module for ralph.sh
-# Plain Docker runtime: image build, config preparation, provider checks
+# Plain Docker runtime: image build, provider checks, docker run builder
 # Dependencies: constants.sh, logging.sh
 #
-# Ralph runs every agent invocation in an ephemeral container that mounts the
-# project at the same absolute path as the host. Only the pi models and settings
-# files, the project skills, and the host gitconfig are exposed to the container.
-
-PI_MODELS_SOURCE="$HOME/.pi/agent/models.json"
-PI_SETTINGS_SOURCE="$HOME/.pi/agent/settings.json"
-PI_MODELS_FILE="$SCRIPT_DIR/.agent/pi/models.json"
-GITCONFIG_FILE="$HOME/.gitconfig"
+# Ralph runs every agent invocation in an ephemeral container. Only the
+# workspace is writable; specs, skills, and pi config are mounted read-only.
 
 # Fail fast when Docker is missing or its daemon is unreachable.
 ensure_docker_available() {
@@ -43,41 +37,16 @@ ensure_pi_image() {
   log_success "Built $PI_IMAGE"
 }
 
-# Copy the host pi models config into the project and rewrite loopback provider
-# URLs so they resolve to the host from inside the container.
-# The host file is never modified.
-prepare_pi_models_file() {
-  mkdir -p "$(dirname "$PI_MODELS_FILE")"
-
-  if [ ! -f "$PI_MODELS_SOURCE" ]; then
-    log_warn "No pi models config at $PI_MODELS_SOURCE; relying on provider env vars"
-    rm -f "$PI_MODELS_FILE"
-    return 0
-  fi
-
-  sed \
-    -e 's|http://localhost:|http://host.docker.internal:|g' \
-    -e 's|http://127\.0\.0\.1:|http://host.docker.internal:|g' \
-    "$PI_MODELS_SOURCE" > "$PI_MODELS_FILE"
-}
-
-# Verify the skills directory exists. The canonical source is `.agents/skills`.
-# `.agent/skills` and `.claude/skills` symlink to it.
-prepare_skill_mount_point() {
-  if [ ! -d "$SCRIPT_DIR/.agents/skills" ]; then
-    mkdir -p "$SCRIPT_DIR/.agents/skills"
-  fi
-}
-
 # Verify a loopback provider is reachable from inside the container.
-# Skipped entirely when the models config has no loopback provider.
+# Skipped entirely when the project models config has no loopback provider.
 check_pi_provider_reachable() {
-  if [ ! -f "$PI_MODELS_FILE" ]; then
+  local models_file="$SCRIPT_DIR/.pi/models.json"
+  if [ ! -f "$models_file" ]; then
     return 0
   fi
 
   local endpoint
-  endpoint=$(grep -oE 'host\.docker\.internal:[0-9]+' "$PI_MODELS_FILE" | head -1)
+  endpoint=$(grep -oE 'host\.docker\.internal:[0-9]+' "$models_file" | head -1)
   if [ -z "$endpoint" ]; then
     return 0
   fi
@@ -91,7 +60,7 @@ check_pi_provider_reachable() {
   fi
 
   log_error "Cannot reach http://$endpoint from inside the container."
-  log_error "The provider in $PI_MODELS_SOURCE is only reachable on the host loopback."
+  log_error "The provider in $models_file must be reachable from Docker."
   exit $EXIT_PROVIDER_ERROR
 }
 
@@ -105,21 +74,24 @@ build_docker_run_command() {
     --add-host host.docker.internal:host-gateway
     --user "$(id -u):$(id -g)"
     -e HOME=/home/pi
-    -e PI_CODING_AGENT_DIR=/pi-agent
-    -w "$SCRIPT_DIR"
-    -v "$SCRIPT_DIR:$SCRIPT_DIR"
+    -w /workspace
+    -v "$SCRIPT_DIR/workspace:/workspace"
+    -v "$SCRIPT_DIR/.agent:/workspace/.agent:ro"
+    -v "$SCRIPT_DIR/.agents:/workspace/.agents:ro"
   )
 
-  if [ -f "$PI_MODELS_FILE" ]; then
-    args+=(-v "$PI_MODELS_FILE:/pi-agent/models.json:ro")
+  if [ -d "$SCRIPT_DIR/.pi" ]; then
+    args+=(-v "$SCRIPT_DIR/.pi:/pi-config:ro")
   fi
 
-  if [ -f "$PI_SETTINGS_SOURCE" ]; then
-    args+=(-v "$PI_SETTINGS_SOURCE:/pi-agent/settings.json:ro")
+  local git_name git_email
+  git_name=$(git config user.name 2>/dev/null || true)
+  git_email=$(git config user.email 2>/dev/null || true)
+  if [ -n "$git_name" ]; then
+    args+=(-e "GIT_AUTHOR_NAME=$git_name" -e "GIT_COMMITTER_NAME=$git_name")
   fi
-
-  if [ -f "$GITCONFIG_FILE" ]; then
-    args+=(-v "$GITCONFIG_FILE:/home/pi/.gitconfig:ro")
+  if [ -n "$git_email" ]; then
+    args+=(-e "GIT_AUTHOR_EMAIL=$git_email" -e "GIT_COMMITTER_EMAIL=$git_email")
   fi
 
   args+=("$PI_IMAGE")

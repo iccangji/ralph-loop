@@ -22,6 +22,7 @@ source "$SCRIPT_DIR/scripts/lib/preview.sh"
 source "$SCRIPT_DIR/scripts/lib/output.sh"
 source "$SCRIPT_DIR/scripts/lib/cleanup.sh"
 source "$SCRIPT_DIR/scripts/lib/promise.sh"
+source "$SCRIPT_DIR/scripts/lib/tasks.sh"
 source "$SCRIPT_DIR/scripts/lib/notify.sh"
 source "$SCRIPT_DIR/scripts/lib/agents.sh"
 source "$SCRIPT_DIR/scripts/lib/display.sh"
@@ -56,6 +57,7 @@ RALPH_CONTAINER_NAME=$(build_container_name "$RALPH_AGENT" "$SCRIPT_DIR")
 
 # Initialize progress file if it doesn't exist
 if [ ! -f "$PROGRESS_FILE" ]; then
+  mkdir -p "$(dirname "$PROGRESS_FILE")"
   echo "# Ralph Progress Log" > "$PROGRESS_FILE"
   echo "Started: $(date)" >> "$PROGRESS_FILE"
   echo "---" >> "$PROGRESS_FILE"
@@ -68,8 +70,6 @@ check_history_dir
 check_ansi_support
 ensure_docker_available
 ensure_pi_image
-prepare_pi_models_file
-prepare_skill_mount_point
 check_pi_provider_reachable
 
 show_ralph
@@ -87,8 +87,8 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   echo -e "${B}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
   echo -e ""
 
-  # Run Agent with the ralph prompt (prepend PROJECT_ROOT)
-  PROMPT_CONTENT="PROJECT_ROOT=$SCRIPT_DIR
+  # Run Agent with the ralph prompt (point PROJECT_ROOT to /workspace inside container)
+  PROMPT_CONTENT="PROJECT_ROOT=/workspace
 
 $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
 
@@ -182,10 +182,7 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
     echo ""
     echo -e "${RD}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
     echo -e "  ❌ ${RD}Authentication Error${R}"
-    echo -e "  Invalid API key. Please authenticate pi on the host."
-    echo -e ""
-    echo -e "  Run the following command and follow the login instructions:"
-    echo -e "  ${C}$(agent_login_command "$RALPH_AGENT")${R}"
+    echo -e "  Invalid API key or unreachable provider in .pi/models.json."
     echo -e "${RD}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
     rm -f "$OUTPUT_FILE" "$FULL_OUTPUT_FILE"
     exit $EXIT_AUTH_ERROR
@@ -240,6 +237,12 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   AVG_STR=$(format_duration $ITERATION_AVG)
   DELTA_STR=$(format_delta $ITERATION_DURATION $PREV_ITERATION_TIME)
   PREV_ITERATION_TIME=$ITERATION_DURATION
+
+  # Host updates .agent/tasks.json and LOG.md whenever completed task tags appear
+  for task_id in $(extract_completed_task_ids "$TAG_OUTPUT"); do
+    mark_task_complete "$task_id"
+  done
+
   COMPLETED_TASK_IDS=$(format_completed_task_ids "$TAG_OUTPUT")
   TASK_IDS_SEGMENT=""
   if [ -n "$COMPLETED_TASK_IDS" ]; then
@@ -247,7 +250,7 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   fi
 
   # Check for completion signal
-  if has_complete_tag "$TAG_OUTPUT"; then
+  if has_complete_tag "$TAG_OUTPUT" || all_tasks_passed; then
     ELAPSED=$(($(date +%s) - START_TIME))
     ELAPSED_STR=$(format_duration $ELAPSED)
     echo ""
@@ -331,7 +334,7 @@ fi
 
 echo ""
 echo -e "${Y}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
-echo -e "  ⚠️  ${Y}Ralph reached max iterations${R} (${M}$MAX_ITERATIONS${R})"
+echo -e "  ⚠️  Ralph reached max iterations${R} (${M}$MAX_ITERATIONS${R})"
 if [ ${#ITERATION_TIMES[@]} -gt 0 ]; then
   echo -e "  ⏱️  Average iteration time: ${Y}$FINAL_AVG_STR${R}"
 fi

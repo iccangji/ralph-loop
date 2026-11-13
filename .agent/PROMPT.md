@@ -1,4 +1,4 @@
-> ⛔ **ONE TASK PER INVOCATION**. Complete exactly one task from `.agent/tasks.json`, commit it, then stop.
+> ⛔ **ONE TASK PER INVOCATION**. Complete exactly one task from `.agent/tasks.json`, commit it in git, then output the promise tag and stop.
 
 ## Overview
 
@@ -6,9 +6,10 @@ You are implementing the project described in `.agent/prd/SUMMARY.md`.
 
 ## Environment
 
-You run inside an ephemeral Docker container as the host user, with the project mounted at the same absolute path as on the host.
+You run inside an ephemeral Docker container as the host user, with the target workspace mounted at `/workspace`.
 
-- Only the project directory persists between iterations. Anything written under `$HOME` is lost when this iteration ends.
+- Only `/workspace` is writable. All other paths (including `.agent/` and `.agents/`) are mounted **READ-ONLY**.
+- **DO NOT attempt to modify `.agent/tasks.json` or `.agent/logs/LOG.md`**. The host orchestrator manages task state and logs automatically based on your promise tags.
 - There is no browser and no display. Verify work with the project's tests and `curl`.
 - There is no `sudo`, and you cannot install system packages. Use the tools already in the image and project-level package managers.
 - A dev server listens inside the container only. The host cannot reach its port.
@@ -16,7 +17,7 @@ You run inside an ephemeral Docker container as the host user, with the project 
 
 ## Before Starting
 
-1. Read `.agent/STEERING.md`. Finish any critical item first, in order, and remove it when done.
+1. Read `.agent/STEERING.md`. Finish any critical item first, in order.
 2. Read the last 5 entries in `.agent/logs/LOG.md` so you do not repeat past work.
 3. Read the project's own instructions: `README`, `AGENTS.md`, `package.json`, `Makefile`, or the equivalent for this stack.
 
@@ -37,17 +38,15 @@ Tasks are listed in `.agent/tasks.json`.
 3. Implement the steps and add or update tests that prove the task works.
 4. Run the project's checks for the affected files, then the project-wide test suite.
 5. All checks must pass. If you broke an unrelated test, fix it before continuing.
-6. Set `passes: true` for this task in `tasks.json`.
-7. Add an entry to `.agent/logs/LOG.md` with the date and a short summary, newest at the top.
-8. Commit with the Conventional Commit format.
-9. If every task now has `passes: true`, output `<promise>COMPLETE</promise>`. Otherwise output `<promise>TASK-{ID}:DONE</promise>`.
-10. Stop immediately. Do not read or start the next task.
+6. Commit changes to git with the Conventional Commit format.
+7. Output `<promise>TASK-{ID}:DONE</promise>`. If every task in `tasks.json` now passes (including the one you just completed), output `<promise>COMPLETE</promise>`.
+8. Stop immediately. Do not read or start the next task.
 
 ## Rules
 
 - **ONE task per invocation.** Your response must end at the promise tag. Do not continue after it.
 - Kill any background process you started (dev server, watcher) before the promise tag.
-- Work only inside the project directory. Do not run `git init`, change remotes, or `git push`.
+- Work only inside `/workspace`. Do not run `git init`, change remotes, or `git push`.
 - Do not commit secrets. Keep `.env` and credentials out of git.
 - Do not rewrite unrelated code or reformat files you did not touch.
 - If the same fix fails twice, stop and report instead of looping.

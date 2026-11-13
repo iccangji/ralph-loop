@@ -1,3 +1,8 @@
+# Generated pi container config (contains provider credentials)
+.agent/pi/
+.pi/models.json
+.pi/settings.json
+
 node_modules
 .DS_Store
 dist
@@ -11,6 +16,3 @@ dist-ssr
 .vinxi
 __unconfig*
 todos.json
-
-# Generated pi container config (contains provider credentials)
-.agent/pi/
