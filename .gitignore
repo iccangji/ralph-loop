@@ -14,5 +14,3 @@ todos.json
 
 # Generated pi container config (contains provider credentials)
 .agent/pi/
-# Mount target for .agent/skills, see scripts/lib/docker.sh
-.agents/

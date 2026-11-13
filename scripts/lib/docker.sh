@@ -61,11 +61,12 @@ prepare_pi_models_file() {
     "$PI_MODELS_SOURCE" > "$PI_MODELS_FILE"
 }
 
-# Pi only discovers project skills under `.agents/skills`. The repo keeps them
-# in `.agent/skills`, so the container gets a bind mount between the two paths
-# and this empty directory exists purely as the mount target.
+# Verify the skills directory exists. The canonical source is `.agents/skills`.
+# `.agent/skills` and `.claude/skills` symlink to it.
 prepare_skill_mount_point() {
-  mkdir -p "$SCRIPT_DIR/.agents/skills"
+  if [ ! -d "$SCRIPT_DIR/.agents/skills" ]; then
+    mkdir -p "$SCRIPT_DIR/.agents/skills"
+  fi
 }
 
 # Verify a loopback provider is reachable from inside the container.
@@ -115,10 +116,6 @@ build_docker_run_command() {
 
   if [ -f "$PI_SETTINGS_SOURCE" ]; then
     args+=(-v "$PI_SETTINGS_SOURCE:/pi-agent/settings.json:ro")
-  fi
-
-  if [ -d "$SCRIPT_DIR/.agent/skills" ]; then
-    args+=(-v "$SCRIPT_DIR/.agent/skills:$SCRIPT_DIR/.agents/skills:ro")
   fi
 
   if [ -f "$GITCONFIG_FILE" ]; then

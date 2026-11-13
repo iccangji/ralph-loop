@@ -280,7 +280,7 @@ The `ralph.sh` script is designed to be hackable.
 It runs the pi coding agent in an ephemeral Docker container, and you can select it explicitly with `--agent pi`.
 Each run uses a deterministic container name in the form `ralph-<agent>-<current-dir>-<hash8>`, and the container is removed on exit or double Ctrl+C.
 
-> NB: pi discovers project skills under `.agents/skills`. The container gets `.agent/skills` bind-mounted to that path, so the canonical source stays in `.agent/skills`.
+> NB: The canonical skills directory is `.agents/skills`. `.agent/skills` and `.claude/skills` symlink to it so various agent conventions work seamlessly. Since the entire repository is mounted into the container at the same path, relative symlinks resolve correctly inside the container.
 
 ### Promise Tags
 
@@ -315,13 +315,16 @@ Ralph uses semantic tags to communicate status:
 │   └── LOG.md          # Progress log (auto-created)
 ├── history/            # Iteration output logs
 ├── pi/                 # Generated container models.json (gitignored)
-└── skills/             # Shared skills (source of truth)
+└── skills/             # Symlink -> ../.agents/skills
 
 .pi/
 └── mcp.json            # Project MCP servers used by pi
 
+.claude/
+└── skills/             # Symlink -> ../.agents/skills
+
 .agents/
-└── skills/             # Mount target for .agent/skills (gitignored)
+└── skills/             # Shared skills (source of truth)
 ```
 
 ## Continued Development
@@ -344,7 +347,7 @@ It's fine to add multiple tasks at once.
 
 ## Skills
 
-Skills are reusable agent capabilities that provide specialized knowledge and workflows. The canonical source is `.agent/skills/`. Pi discovers project skills under `.agents/skills`, so the container bind-mounts `.agent/skills` there.
+Skills are reusable agent capabilities that provide specialized knowledge and workflows. The canonical source is `.agents/skills/`. `.agent/skills/` and `.claude/skills/` symlink to it so different agent toolchains locate them without friction.
 
 ### Available Skills
 
@@ -364,18 +367,19 @@ Skills are reusable agent capabilities that provide specialized knowledge and wo
 
 ### Skills Directory Structure
 
-`.agent/skills/` is the only copy of the skills. Nothing is symlinked: Ralph mounts that directory at `.agents/skills` inside the container, which is where pi looks for project skills.
+`.agents/skills/` is the source of truth for all skills. `.agent/skills` and `.claude/skills` are relative symlinks pointing to `../.agents/skills`.
 
 ```
- # Source of truth (host)
-.agent/skills/
+# Source of truth
+.agents/skills/
     ├── component-refactoring/
     ├── e2e-tester/
     ├── postgres/
     ├── ...
 
-# Mount target inside the container (empty on the host, gitignored)
-.agents/skills/  -> bind mount of .agent/skills
+# Symlinks (relative)
+.agent/skills   -> ../.agents/skills
+.claude/skills  -> ../.agents/skills
 ```
 
 ## Reference
@@ -396,7 +400,7 @@ Per iteration Ralph:
 
 - runs the container as your host UID/GID (`--user "$(id -u):$(id -g)"`),
 - mounts the project at the same absolute path as on the host,
-- mounts `.agent/pi/models.json`, `~/.pi/agent/settings.json`, `.agent/skills`, and `~/.gitconfig` read-only,
+- mounts `.agent/pi/models.json`, `~/.pi/agent/settings.json`, and `~/.gitconfig` read-only,
 - uses bridge networking with `host.docker.internal` mapped to the host gateway,
 - removes the container when the iteration ends or Ralph exits.
 
@@ -509,7 +513,6 @@ docker run --rm -it \
   -v "$PWD:$PWD" \
   -v "$PWD/.agent/pi/models.json:/pi-agent/models.json:ro" \
   -v "$HOME/.pi/agent/settings.json:/pi-agent/settings.json:ro" \
-  -v "$PWD/.agent/skills:$PWD/.agents/skills:ro" \
   -v "$HOME/.gitconfig:/home/pi/.gitconfig:ro" \
   --entrypoint bash \
   ralph-pi:1.5.2
