@@ -9,7 +9,7 @@
 
 # Tracks whether cleanup has already run during this process.
 # Both the EXIT trap and handle_interrupt may call cleanup, so this guard
-# prevents double-stopping the sandbox or removing temp files twice.
+# prevents double-removing the container or removing temp files twice.
 CLEANUP_DONE=0
 
 # Cleanup function - kills background processes and removes temp files
@@ -27,8 +27,8 @@ cleanup() {
   SPINNER_PID=""
 
   # Kill Agent process tree if still running
-  # The process tree is: script -> bash -> sbx run
-  # Killing just the script PID leaves the sbx running
+  # The process tree is: script -> bash -> docker run
+  # Killing just the script PID leaves the container running
   if [ -n "$AGENT_PID" ] && kill -0 "$AGENT_PID" 2>/dev/null; then
     # Kill child processes first (bash -> docker), then the script process
     pkill -TERM -P "$AGENT_PID" 2>/dev/null || true
@@ -37,19 +37,24 @@ cleanup() {
   fi
   AGENT_PID=""
 
-  # Stop only the deterministic sandbox for this Ralph invocation.
-  if [ -n "$RALPH_SANDBOX_NAME" ] && command -v sbx &>/dev/null; then
-    echo -e "  ${Y}📦 Stopping sandbox ${RALPH_SANDBOX_NAME}...${R}"
-    sbx stop "$RALPH_SANDBOX_NAME" 2>/dev/null &
-    local stop_pid=$!
+  # Remove only the deterministic container for this Ralph invocation.
+  if [ -n "$RALPH_CONTAINER_NAME" ] && command -v docker &>/dev/null; then
+    echo -e "  ${Y}📦 Removing container ${RALPH_CONTAINER_NAME}...${R}"
+    docker rm -f "$RALPH_CONTAINER_NAME" >/dev/null 2>&1 &
+    local remove_pid=$!
     # Timeout after 5 seconds to avoid hanging on exit
-    ( sleep 5 && kill "$stop_pid" 2>/dev/null ) &>/dev/null &
+    ( sleep 5 && kill "$remove_pid" 2>/dev/null ) &>/dev/null &
     local timeout_pid=$!
-    if wait "$stop_pid" 2>/dev/null; then
-      echo -e "  ${GR}✅ Sandbox stopped${R}"
+    if wait "$remove_pid" 2>/dev/null; then
+      echo -e "  ${GR}✅ Container removed${R}"
     fi
     kill "$timeout_pid" 2>/dev/null || true
     wait "$timeout_pid" 2>/dev/null || true
+  fi
+
+  # Remove the generated container models config (contains provider credentials)
+  if [ -n "$PI_MODELS_FILE" ]; then
+    rm -f "$PI_MODELS_FILE" 2>/dev/null || true
   fi
 
   # Remove temporary files

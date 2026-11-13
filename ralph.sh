@@ -13,6 +13,7 @@ HISTORY_DIR="$SCRIPT_DIR/.agent/history"
 
 source "$SCRIPT_DIR/scripts/lib/constants.sh"
 source "$SCRIPT_DIR/scripts/lib/logging.sh"
+source "$SCRIPT_DIR/scripts/lib/docker.sh"
 source "$SCRIPT_DIR/scripts/lib/preflight.sh"
 source "$SCRIPT_DIR/scripts/lib/timing.sh"
 source "$SCRIPT_DIR/scripts/lib/terminal.sh"
@@ -51,7 +52,7 @@ trap handle_interrupt INT
 # Parse arguments (sets MAX_ITERATIONS, ONCE_FLAG, RALPH_AGENT, AGENT_EXTRA_ARGS)
 parse_arguments "$@"
 RALPH_AGENT_NAME=$(agent_display_name "$RALPH_AGENT")
-RALPH_SANDBOX_NAME=$(build_sandbox_name "$RALPH_AGENT" "$SCRIPT_DIR")
+RALPH_CONTAINER_NAME=$(build_container_name "$RALPH_AGENT" "$SCRIPT_DIR")
 
 # Initialize progress file if it doesn't exist
 if [ ! -f "$PROGRESS_FILE" ]; then
@@ -65,9 +66,14 @@ check_git_repo
 check_required_files
 check_history_dir
 check_ansi_support
+ensure_docker_available
+ensure_pi_image
+prepare_pi_models_file
+prepare_skill_mount_point
+check_pi_provider_reachable
 
 show_ralph
-echo -e " ${C}Starting Ralph${R} ・ ${Y}v$VERSION${R} ・ Agent: ${Y}$RALPH_AGENT_NAME${R} ・ Sandbox: ${Y}$RALPH_SANDBOX_NAME${R} ・ Max iterations: ${Y}$MAX_ITERATIONS${R}"
+echo -e " ${C}Starting Ralph${R} ・ ${Y}v$VERSION${R} ・ Agent: ${Y}$RALPH_AGENT_NAME${R} ・ Container: ${Y}$RALPH_CONTAINER_NAME${R} ・ Max iterations: ${Y}$MAX_ITERATIONS${R}"
 echo ""
 
 for i in $(seq 1 $MAX_ITERATIONS); do
@@ -96,13 +102,12 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   OUTPUT_FILE=$(mktemp)
   FULL_OUTPUT_FILE=$(mktemp)
 
-  # Use script to provide pseudo-TTY for sbx.
+  # Use script to provide a pseudo-TTY for docker run.
   # This is the main command loop.
   export PROMPT_CONTENT
-  export DOCKER_DEFAULT_PLATFORM=linux/amd64 # Needed for Playwright.
 
-  AGENT_COMMAND=$(build_agent_command "$RALPH_AGENT" "$RALPH_SANDBOX_NAME")
-  script -q "$OUTPUT_FILE" bash -c "$AGENT_COMMAND" >/dev/null 2>&1 &
+  AGENT_COMMAND=$(build_agent_command "$RALPH_CONTAINER_NAME")
+  run_in_pseudo_tty "$OUTPUT_FILE" "$AGENT_COMMAND" </dev/null >/dev/null 2>&1 &
   AGENT_PID=$!
 
   # Track position in output file for incremental reading
@@ -111,12 +116,12 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   # Monitor output and update spinner step and rolling preview
   while kill -0 "$AGENT_PID" 2>/dev/null; do
     if [ -f "$OUTPUT_FILE" ]; then
-      # Get current file size
-      CURRENT_SIZE=$(stat -f%z "$OUTPUT_FILE" 2>/dev/null || stat -c%s "$OUTPUT_FILE" 2>/dev/null || echo "0")
+      # Only consume complete lines: a partially written JSON record would be
+      # parsed as a fragment and its text lost.
+      SAFE_SIZE=$(last_complete_line_offset "$OUTPUT_FILE" "$LAST_POS")
 
-      # Read new content if file has grown
-      if [ "$CURRENT_SIZE" -gt "$LAST_POS" ]; then
-        # Read new lines
+      # Read new complete lines
+      if [ "$SAFE_SIZE" -gt "$LAST_POS" ]; then
         while IFS= read -r line; do
           if [ -n "$line" ]; then
             # Parse JSON and extract text content
@@ -130,8 +135,8 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
               update_preview_line "$parsed"
             fi
           fi
-        done < <(tail -c +$((LAST_POS + 1)) "$OUTPUT_FILE" 2>/dev/null)
-        LAST_POS=$CURRENT_SIZE
+        done < <(tail -c +$((LAST_POS + 1)) "$OUTPUT_FILE" 2>/dev/null | head -c $((SAFE_SIZE - LAST_POS)))
+        LAST_POS=$SAFE_SIZE
       fi
     fi
     sleep 0.2 || true
@@ -177,10 +182,10 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
     echo ""
     echo -e "${RD}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
     echo -e "  ❌ ${RD}Authentication Error${R}"
-    echo -e "  Invalid API key. Please authenticate inside the Docker sandbox."
+    echo -e "  Invalid API key. Please authenticate pi on the host."
     echo -e ""
     echo -e "  Run the following command and follow the login instructions:"
-    echo -e "  ${C}$(agent_login_command "$RALPH_AGENT" "$RALPH_SANDBOX_NAME")${R}"
+    echo -e "  ${C}$(agent_login_command "$RALPH_AGENT")${R}"
     echo -e "${RD}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
     rm -f "$OUTPUT_FILE" "$FULL_OUTPUT_FILE"
     exit $EXIT_AUTH_ERROR
@@ -193,6 +198,10 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
 
   # Extract final summary before removing files
   FINAL_SUMMARY=$(extract_final_summary "$OUTPUT_FILE")
+
+  # Tag detection reads the raw transcript too: pi streams text in deltas, so a
+  # tag can be split across two preview lines that grep cannot match.
+  TAG_OUTPUT=$(printf '%s\n%s\n%s' "$OUTPUT" "$FINAL_SUMMARY" "$(cat "$HISTORY_FILE" 2>/dev/null)")
 
   rm -f "$FULL_OUTPUT_FILE"
   FULL_OUTPUT_FILE=""  # Clear after removal
@@ -231,16 +240,14 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   AVG_STR=$(format_duration $ITERATION_AVG)
   DELTA_STR=$(format_delta $ITERATION_DURATION $PREV_ITERATION_TIME)
   PREV_ITERATION_TIME=$ITERATION_DURATION
-  COMPLETED_TASK_IDS=$(format_completed_task_ids "$(printf '%s\n%s' "$OUTPUT" "$FINAL_SUMMARY")")
+  COMPLETED_TASK_IDS=$(format_completed_task_ids "$TAG_OUTPUT")
   TASK_IDS_SEGMENT=""
   if [ -n "$COMPLETED_TASK_IDS" ]; then
     TASK_IDS_SEGMENT=" ${C}│${R} Tasks: ${Y}$COMPLETED_TASK_IDS${R}"
   fi
 
   # Check for completion signal
-  # Note: We check both $OUTPUT and $FINAL_SUMMARY because some agents emit
-  # structured output where FINAL_SUMMARY has a cleaner final message.
-  if has_complete_tag "$OUTPUT" || has_complete_tag "$FINAL_SUMMARY"; then
+  if has_complete_tag "$TAG_OUTPUT"; then
     ELAPSED=$(($(date +%s) - START_TIME))
     ELAPSED_STR=$(format_duration $ELAPSED)
     echo ""
@@ -259,11 +266,8 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   fi
 
   # Check for BLOCKED tag - agent needs human help
-  # Check both $OUTPUT and $FINAL_SUMMARY (see completion signal comment above)
-  if has_blocked_tag "$OUTPUT" || has_blocked_tag "$FINAL_SUMMARY"; then
-    BLOCKED_REASON=$(extract_blocked_reason "$OUTPUT")
-    # If not found in OUTPUT, try FINAL_SUMMARY
-    [ -z "$BLOCKED_REASON" ] && BLOCKED_REASON=$(extract_blocked_reason "$FINAL_SUMMARY")
+  if has_blocked_tag "$TAG_OUTPUT"; then
+    BLOCKED_REASON=$(extract_blocked_reason "$TAG_OUTPUT")
     ELAPSED=$(($(date +%s) - START_TIME))
     ELAPSED_STR=$(format_duration $ELAPSED)
     play_notification_sound
@@ -280,11 +284,8 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   fi
 
   # Check for DECIDE tag - agent needs human decision
-  # Check both $OUTPUT and $FINAL_SUMMARY (see completion signal comment above)
-  if has_decide_tag "$OUTPUT" || has_decide_tag "$FINAL_SUMMARY"; then
-    DECIDE_QUESTION=$(extract_decide_question "$OUTPUT")
-    # If not found in OUTPUT, try FINAL_SUMMARY
-    [ -z "$DECIDE_QUESTION" ] && DECIDE_QUESTION=$(extract_decide_question "$FINAL_SUMMARY")
+  if has_decide_tag "$TAG_OUTPUT"; then
+    DECIDE_QUESTION=$(extract_decide_question "$TAG_OUTPUT")
     ELAPSED=$(($(date +%s) - START_TIME))
     ELAPSED_STR=$(format_duration $ELAPSED)
     play_notification_sound

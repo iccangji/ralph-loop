@@ -1,0 +1,28 @@
+FROM node:24-bookworm-slim
+
+ARG PI_VERSION=1.5.2
+
+# Tooling the loop needs inside the container. Ralph runs as the host UID/GID,
+# so nothing can be installed at runtime: everything must be baked in here.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    bash \
+    build-essential \
+    ca-certificates \
+    curl \
+    git \
+    jq \
+    python3 \
+    ripgrep \
+    unzip \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@${PI_VERSION}"
+
+# Writable home and agent dir for the mapped host user
+RUN mkdir -p /home/pi /pi-agent \
+  && chmod 0777 /home/pi /pi-agent
+
+ENV HOME=/home/pi
+WORKDIR /workspace
+ENTRYPOINT ["pi"]

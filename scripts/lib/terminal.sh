@@ -55,3 +55,17 @@ truncate_line() {
     echo "$line"
   fi
 }
+
+# Run a command with a pseudo-TTY and record its output to a file.
+# util-linux script needs -c, BSD/macOS script takes the command positionally.
+# Usage: run_in_pseudo_tty <output-file> <command>
+run_in_pseudo_tty() {
+  local output_file="$1"
+  local command="$2"
+
+  if script --help 2>&1 | grep -q -- '--command'; then
+    script -q -c "$command" "$output_file"
+  else
+    script -q "$output_file" bash -c "$command"
+  fi
+}

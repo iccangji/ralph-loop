@@ -3,10 +3,48 @@
 # JSON parsing and ANSI stripping utilities
 # Dependencies: constants.sh, terminal.sh
 
+# Extract readable text from one pi JSON event.
+# Text deltas become plain text; tool starts become lines that detect_step()
+# already understands, e.g. "Bash command=npm test" or "Edit file_path=/a.ts".
+# Usage: parse_pi_json_content "<json line>"
+parse_pi_json_content() {
+  local json_line="$1"
+
+  if ! command -v jq &>/dev/null; then
+    return 0
+  fi
+
+  printf '%s' "$json_line" | jq -r '
+    if .type == "message_update" then
+      (.assistantMessageEvent // {}) as $event
+      | if $event.type == "text_delta" then ($event.delta // empty) else empty end
+    elif .type == "tool_execution_start" then
+      (.toolName // "") as $tool
+      | (.args // {}) as $args
+      | if $tool == "bash" then "Bash command=" + ($args.command // "")
+        elif $tool == "write" then "Write file_path=" + ($args.path // "")
+        elif $tool == "edit" then "Edit file_path=" + ($args.path // "")
+        elif $tool == "read" then "Read file_path=" + ($args.path // "")
+        elif $tool == "grep" then "Grep pattern=" + ($args.pattern // "")
+        elif $tool == "find" then "Find pattern=" + ($args.pattern // "")
+        elif $tool == "ls" then "LS path=" + ($args.path // "")
+        else ($tool + " " + ($args | to_entries | map(.key + "=" + (.value | tostring)) | join(" ")))
+        end
+    else empty end' 2>/dev/null
+}
+
 # Parse JSON stream and extract text content
-# Handles Agent's stream-json format
+# Handles pi JSON mode and Agent's stream-json format
 parse_json_content() {
   local json_line="$1"
+  local pi_text
+
+  pi_text=$(parse_pi_json_content "$json_line")
+  if [ -n "$pi_text" ]; then
+    printf '%s\n' "$pi_text"
+    return
+  fi
+
   # Try to extract text content from various JSON formats
   # For example, Claude stream-json outputs {"type":"content_block_delta","delta":{"text":"..."}}
   # or {"type":"text","text":"..."} etc.
@@ -109,23 +147,74 @@ strip_ansi_file() {
     > "$output_file"
 }
 
+# Byte size of a file, portable across GNU and BSD stat.
+# Usage: size=$(file_size "$file")
+file_size() {
+  stat -f%z "$1" 2>/dev/null || stat -c%s "$1" 2>/dev/null || echo 0
+}
+
+# Byte offset of the end of the last complete line in a file, at or after
+# <offset>. A trailing line without a newline is still being written and is
+# excluded so a JSON record is never parsed half-finished.
+# Usage: safe=$(last_complete_line_offset "$file" "$offset")
+last_complete_line_offset() {
+  local file="$1"
+  local offset="${2:-0}"
+  local size
+  size=$(file_size "$file")
+
+  if [ "$size" -le "$offset" ]; then
+    printf '%s' "$offset"
+    return
+  fi
+
+  # The file already ends on a line boundary.
+  if [ "$(tail -c 1 "$file" | od -An -tu1 | tr -d ' \n')" = "10" ]; then
+    printf '%s' "$size"
+    return
+  fi
+
+  local relative
+  relative=$(tail -c +$((offset + 1)) "$file" | LC_ALL=C awk '
+    { if (NR > 1) sum += prev + 1; prev = length($0) }
+    END { print sum + 0 }')
+  printf '%s' $((offset + relative))
+}
+
 # Extract final summary from JSON stream output
-# Looks for the result type message which contains the final output
+# Looks for the result type message (Claude) or the last assistant message (pi)
 extract_final_summary() {
   local output_file="$1"
   local result_line=""
   local summary=""
 
-  # Look for the result type message in the JSON stream
-  if [ -f "$output_file" ]; then
-    result_line=$(grep '"type":"result"' "$output_file" 2>/dev/null | tail -1)
+  if [ ! -f "$output_file" ]; then
+    echo ""
+    return
+  fi
 
-    if [ -n "$result_line" ]; then
-      # Extract the result text using jq
-      if command -v jq &> /dev/null; then
-        summary=$(echo "$result_line" | jq -r '.result // ""' 2>/dev/null)
-      fi
+  # Look for the result type message in the JSON stream
+  result_line=$(grep '"type":"result"' "$output_file" 2>/dev/null | tail -1)
+
+  if [ -n "$result_line" ]; then
+    # Extract the result text using jq
+    if command -v jq &> /dev/null; then
+      summary=$(echo "$result_line" | jq -r '.result // ""' 2>/dev/null)
     fi
+  fi
+
+  # pi JSON mode: use the text of the last assistant message.
+  # The `script` wrapper adds a header and CRLF endings, so records are parsed
+  # one line at a time and non-JSON lines are dropped before the aggregate pass.
+  if [ -z "$summary" ] && command -v jq &> /dev/null; then
+    summary=$(jq -R 'fromjson? // empty' "$output_file" 2>/dev/null | jq -rs '
+      [ .[] | select(.type == "message_end" and .message.role == "assistant") ] | last
+      | if . == null then ""
+        else .message.content
+          | if type == "string" then .
+            else ([ .[]? | select(.type == "text") | .text ] | join("\n"))
+            end
+        end' 2>/dev/null)
   fi
 
   echo "$summary"
@@ -161,11 +250,11 @@ display_final_summary() {
       echo "${line:0:$cut_at}"
       line="${line:$cut_at}"
       line="${line# }"  # Remove leading space
-      ((line_count++))
+      line_count=$((line_count + 1))
     done
     if [ $line_count -lt $max_lines ] && [ -n "$line" ]; then
       echo "$line"
-      ((line_count++))
+      line_count=$((line_count + 1))
     fi
   done <<< "$summary"
 

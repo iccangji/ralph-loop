@@ -9,7 +9,7 @@
 parse_arguments() {
   MAX_ITERATIONS=10
   ONCE_FLAG=false
-  RALPH_AGENT="claude"
+  RALPH_AGENT="pi"
   AGENT_EXTRA_ARGS=()
 
   while [[ $# -gt 0 ]]; do
@@ -55,7 +55,9 @@ parse_arguments() {
         shift
         ;;
       *)
-        shift
+        echo "Error: unknown argument '$1'" >&2
+        echo "Run ./ralph.sh --help for usage." >&2
+        exit 1
         ;;
     esac
   done
