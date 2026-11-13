@@ -4,7 +4,7 @@
 # Dependencies: constants.sh, logging.sh
 #
 # Ralph runs every agent invocation in an ephemeral container. Only the
-# workspace is writable; specs, skills, and pi config are mounted read-only.
+# workspace is writable; specs, skills, pi config, and gitconfig are mounted read-only.
 
 # Fail fast when Docker is missing or its daemon is unreachable.
 ensure_docker_available() {
@@ -84,14 +84,8 @@ build_docker_run_command() {
     args+=(-v "$SCRIPT_DIR/.pi:/pi-config:ro")
   fi
 
-  local git_name git_email
-  git_name=$(git config user.name 2>/dev/null || true)
-  git_email=$(git config user.email 2>/dev/null || true)
-  if [ -n "$git_name" ]; then
-    args+=(-e "GIT_AUTHOR_NAME=$git_name" -e "GIT_COMMITTER_NAME=$git_name")
-  fi
-  if [ -n "$git_email" ]; then
-    args+=(-e "GIT_AUTHOR_EMAIL=$git_email" -e "GIT_COMMITTER_EMAIL=$git_email")
+  if [ -f "$HOME/.gitconfig" ]; then
+    args+=(-v "$HOME/.gitconfig:/home/pi/.gitconfig:ro")
   fi
 
   args+=("$PI_IMAGE")
