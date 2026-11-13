@@ -1,64 +1,70 @@
-> ⛔ **ONE TASK PER INVOCATION** — Complete one task from @.agent/tasks.json, commit, output `<promise>TASK-{ID}:DONE</promise>`, and STOP. Do NOT start the next task. Do NOT use parallel agents for multiple tasks.
+> ⛔ **ONE TASK PER INVOCATION**. Complete exactly one task from `.agent/tasks.json`, commit it, then stop.
 
 ## Overview
 
-You are implementing the project described in @.agent/prd/SUMMARY.md
+You are implementing the project described in `.agent/prd/SUMMARY.md`.
 
-## Required Setup
+## Environment
 
-Run `npm run dev` (as background process) in `src` directory.
-App will be running at http://localhost:3000 inside this container.
-The host cannot reach that port; verify with `curl` from here instead of a browser.
+You run inside an ephemeral Docker container as the host user, with the project mounted at the same absolute path as on the host.
+
+- Only the project directory persists between iterations. Anything written under `$HOME` is lost when this iteration ends.
+- There is no browser and no display. Verify work with the project's tests and `curl`.
+- There is no `sudo`, and you cannot install system packages. Use the tools already in the image and project-level package managers.
+- A dev server listens inside the container only. The host cannot reach its port.
+- Network access is available. A provider running on the host is reachable at `host.docker.internal`.
 
 ## Before Starting
 
-Check @.agent/STEERING.md for critical work. Complete items in sequence, remove when done. Only proceed to implement tasks if no critical work pending.
+1. Read `.agent/STEERING.md`. Finish any critical item first, in order, and remove it when done.
+2. Read the last 5 entries in `.agent/logs/LOG.md` so you do not repeat past work.
+3. Read the project's own instructions: `README`, `AGENTS.md`, `package.json`, `Makefile`, or the equivalent for this stack.
+
+## Project Commands
+
+Use the commands this project already defines. Find them in `package.json` scripts, the README, or the build config. Do not assume a stack, a test runner, or a port.
+
+- Run the formatter, linter, type checker, and test suite the project defines for the files you touch.
+- If a command does not exist, skip it. Do not add a toolchain just to satisfy this prompt.
+- If the task needs a running app, start the project's dev or start command in the background and verify it with `curl`. Do not assume port 3000.
 
 ## Task Flow
 
-Tasks are listed in @.agent/tasks.json
+Tasks are listed in `.agent/tasks.json`.
 
-1. Pick highest-priority task with `passes: false` in `tasks.json`
-2. Read full spec: `.agent/tasks/TASK-${ID}.json`
-3. Check existing dir structure in @.agent/STRUCTURE.md
-4. Implement steps by step according to spec and write unit test
-5. Run `eslint --fix`, `prettier --write` and the tests for affected files.
-6. Run `tsc` and unit tests project-wide
-7. All tests must pass. Broke unrelated test? Fix it before proceeding.
-8. When tests pass, set `passes: true` in `tasks.json` for the task you completed.
-9. Log entry → `.agent/logs/LOG.md` (date, brief summary, newest at the top)
-10. Update `.agent/STRUCTURE.md` if dirs changed. Exclude dotfiles, tests and config.
-11. Commit changes, using the Conventional Commit format.
+1. Pick the highest-priority task with `passes: false`.
+2. Read its full spec in `.agent/tasks/TASK-${ID}.json`.
+3. Implement the steps and add or update tests that prove the task works.
+4. Run the project's checks for the affected files, then the project-wide test suite.
+5. All checks must pass. If you broke an unrelated test, fix it before continuing.
+6. Set `passes: true` for this task in `tasks.json`.
+7. Add an entry to `.agent/logs/LOG.md` with the date and a short summary, newest at the top.
+8. Commit with the Conventional Commit format.
+9. If every task now has `passes: true`, output `<promise>COMPLETE</promise>`. Otherwise output `<promise>TASK-{ID}:DONE</promise>`.
+10. Stop immediately. Do not read or start the next task.
 
 ## Rules
 
-- **CRITICAL**: Only work on **ONE task per invocation**. After committing the task, output `<promise>TASK-{ID}:DONE</promise>` and **STOP immediately**. Do NOT read the next task. Do NOT continue working. Your response **must END** after the promise tag. Any output after it is a violation.
-- Kill all background processes (dev server, etc.) before outputting the promise tag.
-- No git init/remote changes. **No git push**.
-- Check the last 5 tasks in `.agent/logs/LOG.md` for past work
-- **CRITICAL**: When **ALL** tasks pass → output `<promise>COMPLETE</promise>` and **nothing else**.
+- **ONE task per invocation.** Your response must end at the promise tag. Do not continue after it.
+- Kill any background process you started (dev server, watcher) before the promise tag.
+- Work only inside the project directory. Do not run `git init`, change remotes, or `git push`.
+- Do not commit secrets. Keep `.env` and credentials out of git.
+- Do not rewrite unrelated code or reformat files you did not touch.
+- If the same fix fails twice, stop and report instead of looping.
 
 ## Help Tags
 
-Try solving tasks yourself first.
-When stuck after all possible solutions exhausted, output one of the following tags:
+Try to solve the task first. When you are truly stuck, output one tag and stop.
 
-1. **BLOCKED** — technical issues: dev server not working, deps won't install, env issues, no network, service outages, invalid/missing credentials. Output:
+1. **BLOCKED** for environment problems you cannot fix from inside the container: missing or invalid credentials, a required service that is down, no network, or a tool the image does not contain. Output:
 
 ```
 <promise>BLOCKED:brief description</promise>
 ```
 
-**Exit immediately (no workarounds) for environment constraints you cannot fix from inside the container:**
+These are not bugs. Do not retry with alternative downloads or package managers.
 
-- `Blocked by network policy` → firewall, only user can change from host
-- Missing/invalid credentials or API keys
-- Required system service unavailable
-- Hardware/arch incompatibility with no known fix
-
-These are not bugs. No amount of retries, alternative downloads, or package managers will help. Output BLOCKED on first failure.
-
-2. **DECIDE** — need human input: lib choices, architecture, unclear requirements, breaking changes. Output:
+2. **DECIDE** for a choice only a human can make: library choice, architecture, unclear requirements, breaking changes. Output:
 
 ```
 <promise>DECIDE:question (Option A vs B)</promise>
