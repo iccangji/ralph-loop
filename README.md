@@ -12,6 +12,7 @@ This is an implementation that actually works, containing a hackable script so y
 
 [![Ralph Wiggum Loop](https://github.com/user-attachments/assets/be94b8ba-b073-489d-b07e-d11db975a907)](https://www.youtube.com/watch?v=3TL8Ez66I3o)
 
+- [Quickstart](#quickstart)
 - [Getting Started](#getting-started)
   - [(Optional) Set up code base](#optional-set-up-code-base)
   - [1️⃣ Step 1: Install Ralph](#1️⃣-step-1-install-ralph)
@@ -43,6 +44,41 @@ This is an implementation that actually works, containing a hackable script so y
 - [License](#license)
 
 ---------------------------------
+
+## Quickstart
+
+You need Docker running, the pi CLI on the host, and a git repository for your project.
+
+1. Install and sign in to pi on the host:
+
+   ```bash
+   npm install -g @earendil-works/pi-coding-agent
+   pi
+   ```
+
+   Run `/login` in the pi TUI and follow the instructions. Ralph mounts your pi config into the container, so the login is available inside.
+
+2. Install Ralph in your project:
+
+   ```bash
+   npx @pageai/ralph-loop
+   ```
+
+3. Create the PRD and task list with the `prd-creator` skill. See [Step 2](#2️⃣-step-2-create-a-prd--task-list).
+
+4. Run one iteration to check the setup:
+
+   ```bash
+   ./ralph.sh --once
+   ```
+
+5. Run the loop:
+
+   ```bash
+   ./ralph.sh -n 50
+   ```
+
+The first run builds the `ralph-pi:1.5.2` image. Each iteration starts a fresh container with the project mounted at the same absolute path, then removes it when the iteration ends. If something fails, see [Debugging](#debugging).
 
 ## Getting Started
 
