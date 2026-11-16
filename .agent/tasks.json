@@ -1,1 +1,32 @@
-[]
+[
+  {
+    "id": "TASK-001",
+    "title": "Scaffold Express TS API with SQLite schema",
+    "passes": false
+  },
+  {
+    "id": "TASK-002",
+    "title": "Implement CRUD endpoints with Zod validation",
+    "passes": false
+  },
+  {
+    "id": "TASK-003",
+    "title": "Write API tests with Vitest + supertest",
+    "passes": false
+  },
+  {
+    "id": "TASK-004",
+    "title": "Scaffold React Vite webapp",
+    "passes": false
+  },
+  {
+    "id": "TASK-005",
+    "title": "Build UI CRUD and wire to API",
+    "passes": false
+  },
+  {
+    "id": "TASK-006",
+    "title": "Configure Docker Compose for dev with API proxy",
+    "passes": false
+  }
+]
