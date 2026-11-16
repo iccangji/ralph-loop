@@ -6,7 +6,7 @@
     "specFilePath": ".agent/tasks/TASK-001.json",
     "priority": 1,
     "depends_on": [],
-    "passes": false
+    "passes": true
   },
   {
     "id": "TASK-002",
@@ -14,7 +14,9 @@
     "category": "feature",
     "specFilePath": ".agent/tasks/TASK-002.json",
     "priority": 2,
-    "depends_on": ["TASK-001"],
+    "depends_on": [
+      "TASK-001"
+    ],
     "passes": false
   },
   {
@@ -23,7 +25,9 @@
     "category": "test",
     "specFilePath": ".agent/tasks/TASK-003.json",
     "priority": 3,
-    "depends_on": ["TASK-002"],
+    "depends_on": [
+      "TASK-002"
+    ],
     "passes": false
   },
   {
@@ -41,7 +45,10 @@
     "category": "feature",
     "specFilePath": ".agent/tasks/TASK-005.json",
     "priority": 5,
-    "depends_on": ["TASK-004", "TASK-002"],
+    "depends_on": [
+      "TASK-004",
+      "TASK-002"
+    ],
     "passes": false
   },
   {
@@ -50,7 +57,9 @@
     "category": "feature",
     "specFilePath": ".agent/tasks/TASK-006.json",
     "priority": 6,
-    "depends_on": ["TASK-005"],
+    "depends_on": [
+      "TASK-005"
+    ],
     "passes": false
   }
 ]
