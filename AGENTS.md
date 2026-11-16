@@ -4,6 +4,14 @@ Autonomous agent loop. `ralph.sh` runs the `pi` coding agent inside an
 ephemeral Docker container against the repository in `workspace/`, one task
 per iteration, until every entry in `.agent/tasks.json` has `passes: true`.
 
+## Agent Role: Managing Orchestrator
+
+The agent reading this repository (running in Antigravity or another harness) acts strictly as a **Manager and Orchestrator** for the autonomous loop:
+
+- **Do NOT directly edit `workspace/` code** when a task-driven workflow is underway. Direct code edits bypass test verification, task lifecycle management, git commit isolation, and Docker compose integration testing.
+- **Priority #1 is always `.agent/tasks.json`**: Inspect `tasks.json` and `.agent/tasks/TASK-*.json` first before answering questions, planning next steps, or touching control files.
+- **Execution belongs to `pi`**: The `pi` container launched by `./ralph.sh` is the execution worker. The manager plans, crafts/refines tasks, triggers `./ralph.sh`, reviews output logs, and handles blocked/decide tags.
+
 ## Runtime model
 
 ```
@@ -41,16 +49,20 @@ Do not break these without an explicit request.
 3. **The workspace is the only writable mount inside the agent container.**
    `.agent/`, `.agents/`, `.pi/`, and `~/.gitconfig` are read-only. The agent
    can still write elsewhere through the Docker socket; that is accepted.
-4. **Host owns `.agent/tasks.json` and `.agent/logs/LOG.md`.** The agent only
-   emits promise tags; `scripts/lib/tasks.sh` flips `passes`, appends the log,
-   and commits in this repo.
-5. **No browser, no Playwright, no `sudo`, no runtime system installs.** Tool
+4. **Host owns `.agent/tasks.json` and `.agent/logs/LOG.md`.** The managing
+   agent inspects and manages tasks here; the container sees them read-only.
+   The `pi` agent only emits promise tags; `scripts/lib/tasks.sh` flips
+   `passes`, appends the log, and commits in this repo.
+5. **No direct workspace modifications by managing agent.** All implementation
+   work in `workspace/` must be performed through tasks executed by the `pi`
+   agent container via `ralph.sh`.
+6. **No browser, no Playwright, no `sudo`, no runtime system installs.** Tool
    additions belong in `Dockerfile.pi`, which pins the agent version.
-6. **pi config comes from project `.pi/` only**, never from `$HOME`.
-7. **`workspace/` is its own git repository**, not part of this repo. A
+7. **pi config comes from project `.pi/` only**, never from `$HOME`.
+8. **`workspace/` is its own git repository**, not part of this repo. A
    multi-repo layout (one repo per service) is also valid.
-8. **Unknown CLI flags must error**, not be ignored.
-9. **The Docker socket is mounted on purpose.** The agent manages service
+9. **Unknown CLI flags must error**, not be ignored.
+10. **The Docker socket is mounted on purpose.** The agent manages service
    containers with `docker compose`, which grants host-root equivalent access.
    Only run Ralph on a host you can throw away.
 
@@ -166,7 +178,8 @@ Signs a file needs splitting:
 
 ## Task Execution
 
-- **One task per invocation.** When working from `.agent/tasks.json`, complete exactly one task, commit, and stop. Never batch multiple tasks.
+- **One task per invocation.** The managing agent (running this harness) reads `$AGENT_DIR/tasks.json` and manages context. Do not immediately modify workspace code upon receiving an instruction; read `$AGENT_DIR/tasks.json` and task specs first to understand the execution plan. The `pi` agent inside Docker executes one task per invocation, commits, and reports back via promise tags.
+- **Role of the managing agent.** The host/managing agent acts as a manager and orchestrator for the `pi` agent in Docker. It does not perform workspace code edits directly when task-driven execution is active; it plans, reviews tasks, and delegates execution to the `pi` container iterations.
 
 ## Execution Guidelines
 
