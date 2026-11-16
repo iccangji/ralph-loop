@@ -70,6 +70,8 @@ check_required_files
 check_history_dir
 check_ansi_support
 ensure_docker_available
+check_docker_socket
+check_compose_available
 ensure_pi_image
 check_pi_provider_reachable
 
@@ -88,8 +90,10 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   echo -e "${B}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
   echo -e ""
 
-  # Run Agent with the ralph prompt (point PROJECT_ROOT to /workspace inside container)
-  PROMPT_CONTENT="PROJECT_ROOT=/workspace
+  # Run Agent with the ralph prompt. PROJECT_ROOT is the workspace path as the
+  # host sees it: the container mounts it at the same absolute path so compose
+  # files with relative bind mounts resolve correctly.
+  PROMPT_CONTENT="PROJECT_ROOT=$SCRIPT_DIR/workspace
 
 $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
 
@@ -254,6 +258,10 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   if [ -n "$COMPLETED_TASK_IDS" ] || has_complete_tag "$TAG_OUTPUT"; then
     update_workspace_graph
   fi
+
+  # Containers the agent started are siblings on the host, not children of its
+  # own container, so they outlive it until the project stack is torn down.
+  down_project_stack
 
   # Check for completion signal
   if has_complete_tag "$TAG_OUTPUT" || all_tasks_passed; then

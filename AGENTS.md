@@ -8,14 +8,20 @@ per iteration, until every entry in `.agent/tasks.json` has `passes: true`.
 
 ```
 host (ralph.sh)                     container (ephemeral, host UID/GID)
-  parse args                          /workspace      RW   ← only write path
-  preflight checks                    /workspace/.agent   RO
-  build image (once, cached)          /workspace/.agents  RO
-  docker run ───────────────────────→ /pi-config         RO  (.pi/)
-  read JSONL, spinner, preview        /home/pi/.gitconfig RO
-  mark task done, commit              pi --mode json --approve --no-session
-  refresh graph                       → <promise>TASK-x:DONE</promise>
+  parse args                          $SCRIPT_DIR/workspace  RW  ← same path as host
+  preflight checks                    $SCRIPT_DIR/.agent     RO
+  build image (once, cached)          $SCRIPT_DIR/.agents    RO
+  docker run ───────────────────────→ /pi-config             RO  (.pi/)
+  read JSONL, spinner, preview        /home/pi/.gitconfig    RO
+  mark task done, commit              /var/run/docker.sock   host daemon
+  refresh graph                       pi --mode json --approve --no-session
+  tear down project stack             → <promise>TASK-x:DONE</promise>
 ```
+
+The workspace is mounted at the **same absolute path** it has on the host. That
+is deliberate: compose files with relative bind mounts (`./service-a:/app`) are
+resolved by the host daemon, so a `/workspace` mount would point it at a path
+that does not exist.
 
 Host is the orchestrator and the only owner of task state. The container is
 throwaway: it starts, does one task, commits, prints a promise tag, and dies.
@@ -28,16 +34,21 @@ Do not break these without an explicit request.
    not reintroduce it.
 2. **`pi` is the only supported agent.** `SUPPORTED_AGENTS` in
    `scripts/lib/agents.sh` reflects that.
-3. **`workspace/` is the only writable mount.** `.agent/`, `.agents/`, `.pi/`,
-   and `~/.gitconfig` are read-only. Never widen this.
+3. **The workspace is the only writable mount inside the agent container.**
+   `.agent/`, `.agents/`, `.pi/`, and `~/.gitconfig` are read-only. The agent
+   can still write elsewhere through the Docker socket; that is accepted.
 4. **Host owns `.agent/tasks.json` and `.agent/logs/LOG.md`.** The agent only
    emits promise tags; `scripts/lib/tasks.sh` flips `passes`, appends the log,
    and commits in this repo.
 5. **No browser, no Playwright, no `sudo`, no runtime system installs.** Tool
    additions belong in `Dockerfile.pi`, which pins the agent version.
 6. **pi config comes from project `.pi/` only**, never from `$HOME`.
-7. **`workspace/` is its own git repository**, not part of this repo.
+7. **`workspace/` is its own git repository**, not part of this repo. A
+   multi-repo layout (one repo per service) is also valid.
 8. **Unknown CLI flags must error**, not be ignored.
+9. **The Docker socket is mounted on purpose.** The agent manages service
+   containers with `docker compose`, which grants host-root equivalent access.
+   Only run Ralph on a host you can throw away.
 
 ## Module map
 
@@ -46,7 +57,7 @@ Do not break these without an explicit request.
 | `ralph.sh` | Arg wiring, preflight order, iteration loop, exit codes |
 | `scripts/lib/args.sh` | Flag parsing (`--once`, `-n`, `--agent`, `--`, `--help`) |
 | `scripts/lib/constants.sh` | Version, image tag, `EXIT_*` codes |
-| `scripts/lib/docker.sh` | Image build, provider reachability, `docker run` builder |
+| `scripts/lib/docker.sh` | Image build, provider check, socket mount, stack teardown, `docker run` builder |
 | `scripts/lib/agents.sh` | Agent registry, container naming, `build_agent_command` |
 | `scripts/lib/preflight.sh` | Workspace git check, required files |
 | `scripts/lib/output.sh` | pi JSONL parsing, summary extraction, complete-line offset |
@@ -57,11 +68,14 @@ Do not break these without an explicit request.
 | `scripts/lib/{spinner,preview,timing,display,notify,terminal,logging}.sh` | UI only |
 
 `scripts/docker-entrypoint.sh` copies `/pi-config` into the writable
-`/home/pi/.pi/agent`, writes `trust.json` for `/workspace`, then `exec pi "$@"`.
+`/home/pi/.pi/agent`, writes `trust.json` for the current workspace path, then
+`exec pi "$@"`.
 
 ## Per-iteration flow
 
-1. Build the prompt from `.agent/PROMPT.md` with `PROJECT_ROOT=/workspace`.
+1. Build the prompt from `.agent/PROMPT.md` with `PROJECT_ROOT` set to
+   `$SCRIPT_DIR/workspace` (also exported into the container, so the prompt's
+   `$PROJECT_ROOT` works when pasted into a shell).
 2. Run the container under a pseudo-TTY (`script`), capture JSONL to a temp file.
 3. Consume **only complete lines** (`last_complete_line_offset`) so a partial
    record never loses text.
@@ -69,7 +83,9 @@ Do not break these without an explicit request.
    `.agent/history/ITERATION-*.txt`.
 5. On `<promise>TASK-x:DONE</promise>`: mark the task, log it, commit here.
 6. Refresh `workspace/graphify-out/` on the host (skipped if `graphify` absent).
-7. Stop on `COMPLETE`, `BLOCKED` (exit 2), `DECIDE` (exit 3), or max iterations.
+7. Tear down the project stack (`down_project_stack`) so service containers the
+   agent started do not outlive the iteration.
+8. Stop on `COMPLETE`, `BLOCKED` (exit 2), `DECIDE` (exit 3), or max iterations.
 
 ## Verifying changes
 
@@ -94,6 +110,15 @@ full-loop runs need generous timeouts. A short timeout is not a failure signal.
 
 - pi writes `*.lock` files next to its config, so the agent dir must be
   writable. A read-only `/pi-agent` mount fails with `EROFS`.
+- The agent runs as the host UID/GID, so the socket mount needs
+  `--group-add $(stat -c %g /var/run/docker.sock)`. Without it every `docker`
+  call fails with `permission denied`.
+- `COMPOSE_PROJECT_NAME` is injected as `ralph-<hash>` and beats a compose
+  file's `name:`. That is how `down_project_stack` finds the stack; never pass
+  `-p` inside the agent.
+- `IMAGE_REVISION` in `scripts/lib/constants.sh` must be bumped whenever
+  `Dockerfile.pi` changes. `ensure_pi_image` only builds when the tag is
+  missing, so a stale tag silently keeps the old image.
 - pi only reads project MCP config after project trust, hence `trust.json`.
 - Skills are discovered from `.agents/skills` (canonical). `.agent/skills` and
   `.claude/skills` are relative symlinks.

@@ -37,6 +37,11 @@ cleanup() {
     wait "$timeout_pid" 2>/dev/null || true
   fi
 
+  # Containers the agent started are not removed with --rm; drop the stack too.
+  if command -v docker &>/dev/null; then
+    down_project_stack || true
+  fi
+
   [[ -n "$STEP_FILE" ]] && rm -f "$STEP_FILE" 2>/dev/null || true
   [[ -n "$PREVIEW_LINE_FILE" ]] && rm -f "$PREVIEW_LINE_FILE" 2>/dev/null || true
   [[ -n "$OUTPUT_FILE" ]] && rm -f "$OUTPUT_FILE" 2>/dev/null || true

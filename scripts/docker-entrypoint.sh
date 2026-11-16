@@ -9,7 +9,8 @@ if [ -d /pi-config ]; then
   cp -r /pi-config/* /home/pi/.pi/agent/ 2>/dev/null || true
 fi
 
-# Ensure workspace is trusted so extensions/MCP don't prompt
-echo '{"/workspace": true}' > /home/pi/.pi/agent/trust.json 2>/dev/null || true
+# Ensure the workspace is trusted so extensions/MCP don't prompt.
+# The workspace keeps its host path, so the key is whatever the cwd is.
+jq -n --arg p "$(pwd)" '{($p): true}' > /home/pi/.pi/agent/trust.json 2>/dev/null || true
 
 exec pi "$@"

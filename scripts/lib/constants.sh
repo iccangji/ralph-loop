@@ -5,9 +5,12 @@
 # Version
 VERSION="1.0.0"
 
-# Pinned pi coding agent version and the Docker image Ralph builds from it
+# Pinned pi coding agent version and the Docker image Ralph builds from it.
+# Bump IMAGE_REVISION whenever Dockerfile.pi changes: ensure_pi_image only
+# builds when the tag is missing, so a stale tag silently keeps the old image.
 PI_VERSION="1.5.2"
-PI_IMAGE="ralph-pi:$PI_VERSION"
+IMAGE_REVISION="1"
+PI_IMAGE="ralph-pi:${PI_VERSION}-${IMAGE_REVISION}"
 
 # Colors (short syntax)
 Y='\033[33m'        # Yellow

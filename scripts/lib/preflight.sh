@@ -3,13 +3,47 @@
 # Pre-flight checks before starting the main loop
 # Dependencies: constants.sh, logging.sh
 
-# Check if workspace is a git repository
+# Check that the workspace holds at least one git repository. A single repo at
+# the workspace root and a multi-repo layout (one repo per service) both pass.
 # Usage: check_git_repo
 check_git_repo() {
-  if [ ! -d "$SCRIPT_DIR/workspace/.git" ]; then
-    log_error "workspace directory ($SCRIPT_DIR/workspace) is not a git repository. Run 'git init' inside it first."
-    exit 1
+  local ws="$SCRIPT_DIR/workspace"
+
+  if [ -d "$ws/.git" ]; then
+    return 0
   fi
+
+  if find "$ws" -maxdepth 2 -name .git -print -quit 2>/dev/null | grep -q .; then
+    return 0
+  fi
+
+  log_error "workspace ($ws) has no git repository. Run 'git init' in it, or in each service directory."
+  exit 1
+}
+
+# The agent manages service containers through the host daemon, so the socket
+# must exist and be mountable.
+# Usage: check_docker_socket
+check_docker_socket() {
+  if [ ! -S /var/run/docker.sock ]; then
+    log_error "Docker socket not found at /var/run/docker.sock. The agent needs it to manage service containers."
+    exit $EXIT_DOCKER_ERROR
+  fi
+}
+
+# Compose on the host is what tears the agent's stack down between iterations.
+# Usage: check_compose_available
+check_compose_available() {
+  if docker compose version >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if find_compose_file >/dev/null 2>&1; then
+    log_error "docker compose is required to tear down the project stack, but it is not available."
+    exit $EXIT_DOCKER_ERROR
+  fi
+
+  log_warn "docker compose not found; the agent cannot start or stop service containers."
 }
 
 # Ensure history directory exists for storing iteration logs

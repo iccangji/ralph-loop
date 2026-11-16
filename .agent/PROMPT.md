@@ -6,14 +6,35 @@ You are implementing the project described in `.agent/prd/SUMMARY.md`.
 
 ## Environment
 
-You run inside an ephemeral Docker container as the host user, with the target workspace mounted at `/workspace`.
+You run inside an ephemeral Docker container as the host user, with the target workspace mounted at `$PROJECT_ROOT` — the same absolute path it has on the host.
 
-- Only `/workspace` is writable. All other paths (including `.agent/` and `.agents/`) are mounted **READ-ONLY**.
+- Only the workspace directory is writable. All other paths (including `.agent/` and `.agents/`) are mounted **READ-ONLY**.
 - **DO NOT attempt to modify `.agent/tasks.json` or `.agent/logs/LOG.md`**. The host orchestrator manages task state and logs automatically based on your promise tags.
 - There is no browser and no display. Verify work with the project's tests and `curl`.
 - There is no `sudo`, and you cannot install system packages. Use the tools already in the image and project-level package managers.
-- A dev server listens inside the container only. The host cannot reach its port.
 - Network access is available. A provider running on the host is reachable at `host.docker.internal`.
+- You control the host Docker daemon through the mounted socket. `docker` and `docker compose` are installed.
+
+## Service Containers
+
+The workspace is mounted at its real host path, so a compose file at
+`$PROJECT_ROOT/docker-compose.yml` with relative bind mounts such as
+`./service-a:/app` resolves correctly. Always pass `-f`:
+
+```bash
+docker compose -f "$PROJECT_ROOT/docker-compose.yml" up -d --build
+docker compose -f "$PROJECT_ROOT/docker-compose.yml" ps
+docker compose -f "$PROJECT_ROOT/docker-compose.yml" logs --tail 100 service-a
+docker compose -f "$PROJECT_ROOT/docker-compose.yml" exec -T service-a sh -lc 'command'
+docker compose -f "$PROJECT_ROOT/docker-compose.yml" down -v
+```
+
+Rules:
+
+- Never pass `-p`: the project name comes from `COMPOSE_PROJECT_NAME` so the host can tear the stack down.
+- Do not use bare `docker run` for the project's services. Containers started that way are invisible to cleanup.
+- `exec` needs `-T`; there is no TTY.
+- Stop the stack before your promise tag: `docker compose -f "$PROJECT_ROOT/docker-compose.yml" down -v`.
 
 ## Before Starting
 
@@ -46,7 +67,7 @@ Tasks are listed in `.agent/tasks.json`.
 
 - **ONE task per invocation.** Your response must end at the promise tag. Do not continue after it.
 - Kill any background process you started (dev server, watcher) before the promise tag.
-- Work only inside `/workspace`. Do not run `git init`, change remotes, or `git push`.
+- Work only inside `$PROJECT_ROOT`. Do not run `git init`, change remotes, or `git push`.
 - Do not commit secrets. Keep `.env` and credentials out of git.
 - Do not rewrite unrelated code or reformat files you did not touch.
 - If the same fix fails twice, stop and report instead of looping.

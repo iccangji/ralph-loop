@@ -1,3 +1,7 @@
+# Docker CLI and compose plugin, copied from the pinned upstream image. Ralph
+# mounts the host socket, so the agent drives the host daemon directly.
+FROM docker:27.5.1-cli AS dockercli
+
 FROM node:24-bookworm-slim
 
 ARG PI_VERSION=1.5.2
@@ -19,6 +23,10 @@ RUN apt-get update \
 
 RUN npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@${PI_VERSION}"
 
+COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=dockercli /usr/local/libexec/docker/cli-plugins/docker-compose \
+  /usr/local/libexec/docker/cli-plugins/docker-compose
+
 # Writable home and agent dir for the mapped host user
 RUN mkdir -p /home/pi /pi-agent /pi-config \
   && chmod 0777 /home/pi /pi-agent /pi-config
@@ -27,5 +35,5 @@ COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 ENV HOME=/home/pi
-WORKDIR /workspace
+WORKDIR /home/pi
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
