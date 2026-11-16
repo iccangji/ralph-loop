@@ -1,7 +1,9 @@
 {
   "id": "TASK-003",
   "title": "Write API tests with Vitest + supertest",
+  "category": "test",
   "description": "Write comprehensive Vitest + supertest tests for all CRUD endpoints.",
+  "depends_on": ["TASK-002"],
   "steps": [
     "Create tests/setup.ts for test database setup/teardown (in-memory SQLite)",
     "Create tests/notes.test.ts with test suites for all 5 endpoints",
@@ -13,5 +15,8 @@
     "Add npm test script runs vitest",
     "Run tests to verify all pass"
   ],
-  "passes": false
+  "acceptance_criteria": [
+    "npm test runs and all tests pass",
+    "Test coverage includes success + error paths for each of the 5 endpoints"
+  ]
 }

@@ -1,7 +1,9 @@
 {
   "id": "TASK-006",
-  "title": "Docker compose integration with API proxy",
+  "title": "Configure Docker Compose for dev with API proxy",
+  "category": "feature",
   "description": "Set up docker-compose.yml and verify full stack: Express API running, React webapp dev server proxying /api to API service.",
+  "depends_on": ["TASK-005"],
   "steps": [
     "Create workspace/docker-compose.yml: service api (build ./simple-notes-api, port 3001), service webapp (build ./simple-notes-webapp, port 5173, depends_on api)",
     "Create Dockerfile for simple-notes-api (multi-stage build: install deps, tsc build, node dist)",
@@ -11,5 +13,10 @@
     "Test end-to-end CRUD via curl POST/PUT/DELETE against http://localhost:3001/api/notes",
     "Tear down stack (docker compose down -v) before finishing"
   ],
-  "passes": false
+  "acceptance_criteria": [
+    "docker-compose.yml exists in workspace root",
+    "docker compose up -d --build builds and starts both services cleanly",
+    "curl http://localhost:3001/api/notes returns 200 OK with JSON list",
+    "docker compose down -v cleans up stack"
+  ]
 }

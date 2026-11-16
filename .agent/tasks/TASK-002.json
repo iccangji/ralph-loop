@@ -1,7 +1,9 @@
 {
   "id": "TASK-002",
   "title": "Implement CRUD endpoints with Zod validation",
+  "category": "feature",
   "description": "Implement all 5 CRUD endpoints for /api/notes with Zod validation schemas in Express API.",
+  "depends_on": ["TASK-001"],
   "steps": [
     "Create src/routes/notes.ts with router for /api/notes",
     "Define Zod schemas: createNoteSchema (title: string min 1 max 200, content: string min 1 max 10000), updateNoteSchema (same, all optional), noteIdParamSchema (uuid)",
@@ -14,5 +16,10 @@
     "Mount notes router in src/index.ts",
     "Run build to verify compiles"
   ],
-  "passes": false
+  "acceptance_criteria": [
+    "All 5 endpoints (GET list, GET by id, POST, PUT, DELETE) respond correctly to valid requests",
+    "POST/PUT with invalid body (missing/empty/too-long fields) return 400",
+    "GET/PUT/DELETE with unknown id return 404",
+    "npm run build passes"
+  ]
 }

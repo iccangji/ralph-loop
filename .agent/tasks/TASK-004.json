@@ -1,7 +1,9 @@
 {
   "id": "TASK-004",
   "title": "Scaffold React Vite webapp",
+  "category": "setup",
   "description": "Initialize Vite React TypeScript project in workspace/simple-notes-webapp.",
+  "depends_on": [],
   "steps": [
     "Initialize Vite React TS app in workspace/simple-notes-webapp using npm create vite@latest or manual config",
     "Configure vite.config.ts with dev server proxy (/api -> http://localhost:3001)",
@@ -9,5 +11,9 @@
     "Define TypeScript interface Note in src/types.ts (id, title, content, created_at, updated_at)",
     "Run npm build to verify compiles"
   ],
-  "passes": false
+  "acceptance_criteria": [
+    "workspace/simple-notes-webapp/package.json exists with react, vite dependencies",
+    "npm run build succeeds without errors",
+    "vite dev server proxies /api requests to localhost:3001"
+  ]
 }

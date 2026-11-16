@@ -1,7 +1,9 @@
 {
   "id": "TASK-001",
   "title": "Scaffold Express TS API with SQLite schema",
+  "category": "setup",
   "description": "Initialize Express + TypeScript project in workspace/simple-notes-api with SQLite database schema for notes table.",
+  "depends_on": [],
   "steps": [
     "Initialize npm project with package.json in workspace/simple-notes-api",
     "Install dependencies: express, better-sqlite3, uuid, zod, tsx, typescript, @types/node, @types/express, @types/better-sqlite3, @types/uuid, vitest, supertest, @types/supertest",
@@ -11,5 +13,9 @@
     "Add npm scripts: dev (tsx watch src/index.ts), build (tsc), start (node dist/index.js), test (vitest run)",
     "Run initial build to verify TypeScript compiles"
   ],
-  "passes": false
+  "acceptance_criteria": [
+    "workspace/simple-notes-api/package.json exists with express, better-sqlite3, zod, typescript dependencies",
+    "workspace/simple-notes-api/src/db.ts creates SQLite notes table on startup",
+    "npm run build succeeds without TypeScript errors"
+  ]
 }

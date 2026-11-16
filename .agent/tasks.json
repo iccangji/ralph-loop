@@ -2,31 +2,55 @@
   {
     "id": "TASK-001",
     "title": "Scaffold Express TS API with SQLite schema",
+    "category": "setup",
+    "specFilePath": ".agent/tasks/TASK-001.json",
+    "priority": 1,
+    "depends_on": [],
     "passes": false
   },
   {
     "id": "TASK-002",
     "title": "Implement CRUD endpoints with Zod validation",
+    "category": "feature",
+    "specFilePath": ".agent/tasks/TASK-002.json",
+    "priority": 2,
+    "depends_on": ["TASK-001"],
     "passes": false
   },
   {
     "id": "TASK-003",
     "title": "Write API tests with Vitest + supertest",
+    "category": "test",
+    "specFilePath": ".agent/tasks/TASK-003.json",
+    "priority": 3,
+    "depends_on": ["TASK-002"],
     "passes": false
   },
   {
     "id": "TASK-004",
     "title": "Scaffold React Vite webapp",
+    "category": "setup",
+    "specFilePath": ".agent/tasks/TASK-004.json",
+    "priority": 4,
+    "depends_on": [],
     "passes": false
   },
   {
     "id": "TASK-005",
     "title": "Build UI CRUD and wire to API",
+    "category": "feature",
+    "specFilePath": ".agent/tasks/TASK-005.json",
+    "priority": 5,
+    "depends_on": ["TASK-004", "TASK-002"],
     "passes": false
   },
   {
     "id": "TASK-006",
     "title": "Configure Docker Compose for dev with API proxy",
+    "category": "feature",
+    "specFilePath": ".agent/tasks/TASK-006.json",
+    "priority": 6,
+    "depends_on": ["TASK-005"],
     "passes": false
   }
 ]
