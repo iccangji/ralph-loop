@@ -8,9 +8,11 @@ per iteration, until every entry in `.agent/tasks.json` has `passes: true`.
 
 The agent reading this repository (running in Antigravity or another harness) acts strictly as a **Manager and Orchestrator** for the autonomous loop:
 
-- **Do NOT directly edit `workspace/` code** when a task-driven workflow is underway. Direct code edits bypass test verification, task lifecycle management, git commit isolation, and Docker compose integration testing.
+- **Scope boundary: Task Management Only**: The manager's duties are strictly limited to planning, defining, refining, and validating `.agent/tasks.json` and `.agent/tasks/TASK-*.json` specs, PRD, and architecture documentation.
+- **Do NOT execute `./ralph.sh` autonomously**: Do NOT run `./ralph.sh` or trigger the agent loop unless the human partner explicitly commands to run it (e.g. "jalankan ralph", "run ralph.sh").
+- **Do NOT directly edit `workspace/` code**: Direct workspace code edits are strictly prohibited. Implementation belongs entirely to the `pi` agent running inside the Docker sandbox.
 - **Priority #1 is always `.agent/tasks.json`**: Inspect `tasks.json` and `.agent/tasks/TASK-*.json` first before answering questions, planning next steps, or touching control files.
-- **Execution belongs to `pi`**: The `pi` container launched by `./ralph.sh` is the execution worker. The manager plans, crafts/refines tasks, triggers `./ralph.sh`, reviews output logs, and handles blocked/decide tags.
+- **Execution belongs to `pi`**: The `pi` container launched by `./ralph.sh` is the execution worker. The manager prepares clear, self-contained task specs with accurate `depends_on` chains, reviews execution logs when finished, and resolves `BLOCKED` or `DECIDE` requests.
 
 ## Task Structure & Lifecycle
 
@@ -118,13 +120,16 @@ Do not break these without an explicit request.
 5. **No direct workspace modifications by managing agent.** All implementation
    work in `workspace/` must be performed through tasks executed by the `pi`
    agent container via `ralph.sh`.
-6. **No browser, no Playwright, no `sudo`, no runtime system installs.** Tool
+6. **No autonomous `./ralph.sh` execution.** The managing agent must only prepare
+   and manage tasks; it must never run `./ralph.sh` unless explicitly ordered
+   by the user.
+7. **No browser, no Playwright, no `sudo`, no runtime system installs.** Tool
    additions belong in `Dockerfile.pi`, which pins the agent version.
-7. **pi config comes from project `.pi/` only**, never from `$HOME`.
-8. **`workspace/` is its own git repository**, not part of this repo. A
+8. **pi config comes from project `.pi/` only**, never from `$HOME`.
+9. **`workspace/` is its own git repository**, not part of this repo. A
    multi-repo layout (one repo per service) is also valid.
-9. **Unknown CLI flags must error**, not be ignored.
-10. **The Docker socket is mounted on purpose.** The agent manages service
+10. **Unknown CLI flags must error**, not be ignored.
+11. **The Docker socket is mounted on purpose.** The agent manages service
    containers with `docker compose`, which grants host-root equivalent access.
    Only run Ralph on a host you can throw away.
 
