@@ -2,7 +2,7 @@
   {
     "id": "TASK-001",
     "title": "Scaffold Express TS API with SQLite schema",
-    "passes": false
+    "passes": true
   },
   {
     "id": "TASK-002",

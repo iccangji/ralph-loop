@@ -12,3 +12,4 @@
 
 <!-- TODO: Add log entries here -->
 - 2026-11-16 15:54 — TASK-001 
+- 2026-11-16 16:53 — TASK-001 Scaffold Express TS API with SQLite schema
