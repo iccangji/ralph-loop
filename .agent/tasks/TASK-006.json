@@ -1,0 +1,15 @@
+{
+  "id": "TASK-006",
+  "title": "Docker compose integration with API proxy",
+  "description": "Set up docker-compose.yml and verify full stack: Express API running, React webapp dev server proxying /api to API service.",
+  "steps": [
+    "Create workspace/docker-compose.yml: service api (build ./simple-notes-api, port 3001), service webapp (build ./simple-notes-webapp, port 5173, depends_on api)",
+    "Create Dockerfile for simple-notes-api (multi-stage build: install deps, tsc build, node dist)",
+    "Create Dockerfile for simple-notes-webapp (dev-oriented: node image, npm install, vite dev server with --host 0.0.0.0)",
+    "Ensure webapp vite proxy points to api service hostname inside docker network (http://api:3001) via env var override",
+    "Verify: docker compose up -d --build, curl http://localhost:3001/api/notes returns [], curl http://localhost:5173 serves the SPA",
+    "Test end-to-end CRUD via curl POST/PUT/DELETE against http://localhost:3001/api/notes",
+    "Tear down stack (docker compose down -v) before finishing"
+  ],
+  "passes": false
+}

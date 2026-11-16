@@ -1,0 +1,14 @@
+{
+  "id": "TASK-005",
+  "title": "Build UI CRUD and wire to API",
+  "description": "Implement complete single-page React UI with note list, view detail, create form, edit inline/modal, delete confirmation, connected to Express API.",
+  "steps": [
+    "Create src/api.ts helper functions using fetch (/api/notes: getAll, getById, create, update, deleteNote)",
+    "Build NoteList component: display list of notes with title, preview content, updated timestamp",
+    "Build NoteForm component: controlled inputs for title & content, submit handler for create & edit",
+    "Build NoteDetail / Action buttons: edit mode toggle, delete button with confirmation",
+    "Assemble App.tsx with state: notes list, active editing note, loading & error states",
+    "Verify build passes without TypeScript or lint errors"
+  ],
+  "passes": false
+}

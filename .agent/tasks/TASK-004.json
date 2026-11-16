@@ -1,0 +1,13 @@
+{
+  "id": "TASK-004",
+  "title": "Scaffold React Vite webapp",
+  "description": "Initialize Vite React TypeScript project in workspace/simple-notes-webapp.",
+  "steps": [
+    "Initialize Vite React TS app in workspace/simple-notes-webapp using npm create vite@latest or manual config",
+    "Configure vite.config.ts with dev server proxy (/api -> http://localhost:3001)",
+    "Set up basic CSS styles (index.css / App.css) for simple clean UI",
+    "Define TypeScript interface Note in src/types.ts (id, title, content, created_at, updated_at)",
+    "Run npm build to verify compiles"
+  ],
+  "passes": false
+}
