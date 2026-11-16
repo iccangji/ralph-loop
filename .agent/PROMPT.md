@@ -54,7 +54,7 @@ Use the commands this project already defines. Find them in `package.json` scrip
 
 Tasks are listed in `$AGENT_DIR/tasks.json`.
 
-1. Pick the highest-priority task with `passes: false`.
+1. Pick the highest-priority task where `passes: false` and all prerequisites in `depends_on` (if present) already have `passes: true`.
 2. Read its full spec in `$AGENT_DIR/tasks/TASK-${ID}.json`.
 3. Implement the steps and add or update tests that prove the task works.
 4. Run the project's checks for the affected files, then the project-wide test suite.

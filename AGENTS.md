@@ -12,6 +12,68 @@ The agent reading this repository (running in Antigravity or another harness) ac
 - **Priority #1 is always `.agent/tasks.json`**: Inspect `tasks.json` and `.agent/tasks/TASK-*.json` first before answering questions, planning next steps, or touching control files.
 - **Execution belongs to `pi`**: The `pi` container launched by `./ralph.sh` is the execution worker. The manager plans, crafts/refines tasks, triggers `./ralph.sh`, reviews output logs, and handles blocked/decide tags.
 
+## Task Structure & Lifecycle
+
+The project uses a two-tier task structure stored under `$AGENT_DIR`:
+
+### 1. Task Index: `$AGENT_DIR/tasks.json`
+An array of task summary items representing the execution queue:
+```json
+[
+  {
+    "id": "TASK-001",
+    "title": "Short title describing the task",
+    "category": "setup | feature | refactor | test",
+    "specFilePath": ".agent/tasks/TASK-001.json",
+    "priority": 1,
+    "depends_on": [],
+    "passes": false
+  },
+  {
+    "id": "TASK-002",
+    "title": "Feature implementation building on 001",
+    "category": "feature",
+    "specFilePath": ".agent/tasks/TASK-002.json",
+    "priority": 2,
+    "depends_on": ["TASK-001"],
+    "passes": false
+  }
+]
+```
+- `id` *(string, required)*: Identifier matching `TASK-[A-Za-z0-9._-]+`.
+- `title` *(string, required)*: Human-readable task title. Appended to `LOG.md` when completed.
+- `passes` *(boolean, required)*: `false` initially. Updated to `true` exclusively by the host orchestrator (`tasks.sh`) when `<promise>TASK-x:DONE</promise>` is observed.
+- `priority` *(number, optional)*: Priority order (lower integer = higher priority).
+- `depends_on` *(array of strings, optional)*: List of task IDs that must have `passes: true` before this task can be selected. An agent picking tasks must evaluate this dependency chain.
+- `specFilePath` *(string, optional)*: Path to detailed specification file.
+
+### 2. Task Specification: `$AGENT_DIR/tasks/TASK-{ID}.json`
+Comprehensive execution details for a single task:
+```json
+{
+  "id": "TASK-001",
+  "title": "Short title describing the task",
+  "category": "setup | feature | refactor | test",
+  "description": "Full description of what needs to be implemented and why.",
+  "depends_on": [],
+  "steps": [
+    "Step-by-step instructions for implementation",
+    "Specific commands to execute or files to create/edit",
+    "Verification tests to run"
+  ],
+  "acceptance_criteria": [
+    "Specific verifiable assertion 1",
+    "Specific verifiable assertion 2"
+  ]
+}
+```
+
+### 3. Task Execution Rules
+- The managing agent defines and reviews tasks in these files, ensuring dependencies (`depends_on`) form a valid Directed Acyclic Graph (DAG).
+- The `pi` agent selects the highest-priority task where `passes: false` AND all task IDs in `depends_on` have `passes: true`.
+- Once finished, the container commits changes in `workspace/` and outputs `<promise>TASK-{ID}:DONE</promise>`.
+- The host flips `passes: true`, updates `LOG.md`, and commits to this repository.
+
 ## Runtime model
 
 ```
