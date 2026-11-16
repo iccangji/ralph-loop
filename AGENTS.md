@@ -1,3 +1,111 @@
+# Ralph Loop
+
+Autonomous agent loop. `ralph.sh` runs the `pi` coding agent inside an
+ephemeral Docker container against the repository in `workspace/`, one task
+per iteration, until every entry in `.agent/tasks.json` has `passes: true`.
+
+## Runtime model
+
+```
+host (ralph.sh)                     container (ephemeral, host UID/GID)
+  parse args                          /workspace      RW   ← only write path
+  preflight checks                    /workspace/.agent   RO
+  build image (once, cached)          /workspace/.agents  RO
+  docker run ───────────────────────→ /pi-config         RO  (.pi/)
+  read JSONL, spinner, preview        /home/pi/.gitconfig RO
+  mark task done, commit              pi --mode json --approve --no-session
+  refresh graph                       → <promise>TASK-x:DONE</promise>
+```
+
+Host is the orchestrator and the only owner of task state. The container is
+throwaway: it starts, does one task, commits, prints a promise tag, and dies.
+
+## Hard invariants
+
+Do not break these without an explicit request.
+
+1. **Docker is the only runtime.** `sbx` / Docker Sandboxes was removed; do
+   not reintroduce it.
+2. **`pi` is the only supported agent.** `SUPPORTED_AGENTS` in
+   `scripts/lib/agents.sh` reflects that.
+3. **`workspace/` is the only writable mount.** `.agent/`, `.agents/`, `.pi/`,
+   and `~/.gitconfig` are read-only. Never widen this.
+4. **Host owns `.agent/tasks.json` and `.agent/logs/LOG.md`.** The agent only
+   emits promise tags; `scripts/lib/tasks.sh` flips `passes`, appends the log,
+   and commits in this repo.
+5. **No browser, no Playwright, no `sudo`, no runtime system installs.** Tool
+   additions belong in `Dockerfile.pi`, which pins the agent version.
+6. **pi config comes from project `.pi/` only**, never from `$HOME`.
+7. **`workspace/` is its own git repository**, not part of this repo.
+8. **Unknown CLI flags must error**, not be ignored.
+
+## Module map
+
+| File | Responsibility |
+|---|---|
+| `ralph.sh` | Arg wiring, preflight order, iteration loop, exit codes |
+| `scripts/lib/args.sh` | Flag parsing (`--once`, `-n`, `--agent`, `--`, `--help`) |
+| `scripts/lib/constants.sh` | Version, image tag, `EXIT_*` codes |
+| `scripts/lib/docker.sh` | Image build, provider reachability, `docker run` builder |
+| `scripts/lib/agents.sh` | Agent registry, container naming, `build_agent_command` |
+| `scripts/lib/preflight.sh` | Workspace git check, required files |
+| `scripts/lib/output.sh` | pi JSONL parsing, summary extraction, complete-line offset |
+| `scripts/lib/promise.sh` | `<promise>` tag detection and extraction |
+| `scripts/lib/tasks.sh` | `mark_task_complete`, `all_tasks_passed` |
+| `scripts/lib/graphify.sh` | Host-side `graphify update` after completion |
+| `scripts/lib/cleanup.sh` | Signal handling, container and temp-file cleanup |
+| `scripts/lib/{spinner,preview,timing,display,notify,terminal,logging}.sh` | UI only |
+
+`scripts/docker-entrypoint.sh` copies `/pi-config` into the writable
+`/home/pi/.pi/agent`, writes `trust.json` for `/workspace`, then `exec pi "$@"`.
+
+## Per-iteration flow
+
+1. Build the prompt from `.agent/PROMPT.md` with `PROJECT_ROOT=/workspace`.
+2. Run the container under a pseudo-TTY (`script`), capture JSONL to a temp file.
+3. Consume **only complete lines** (`last_complete_line_offset`) so a partial
+   record never loses text.
+4. Feed parsed text to spinner and preview; keep a cleaned transcript in
+   `.agent/history/ITERATION-*.txt`.
+5. On `<promise>TASK-x:DONE</promise>`: mark the task, log it, commit here.
+6. Refresh `workspace/graphify-out/` on the host (skipped if `graphify` absent).
+7. Stop on `COMPLETE`, `BLOCKED` (exit 2), `DECIDE` (exit 3), or max iterations.
+
+## Verifying changes
+
+There is no test suite and no CI. Verify by hand:
+
+```bash
+bash -n ralph.sh && for f in scripts/lib/*.sh; do bash -n "$f"; done
+```
+
+- **Module change** → source the module in a throwaway dir under `/tmp` with
+  `SCRIPT_DIR` set, then call the function and inspect the result.
+- **Mount or command change** → build the image and run `docker run` directly,
+  confirming: `/workspace` writable, `.agent` returns `Read-only file system`,
+  `git config user.name` resolves, provider reachable.
+- **Full loop** → copy the repo to a `/tmp` fixture, `git init` its `workspace/`,
+  add one real task, then `./ralph.sh --once`.
+
+The model behind `9Router/combo1` is slow (a trivial call can take ~70s), so
+full-loop runs need generous timeouts. A short timeout is not a failure signal.
+
+## Known gotchas
+
+- pi writes `*.lock` files next to its config, so the agent dir must be
+  writable. A read-only `/pi-agent` mount fails with `EROFS`.
+- pi only reads project MCP config after project trust, hence `trust.json`.
+- Skills are discovered from `.agents/skills` (canonical). `.agent/skills` and
+  `.claude/skills` are relative symlinks.
+- `.pi/models.json` is gitignored and must point at
+  `http://host.docker.internal:<port>/v1`; the host copy uses `localhost`.
+- `graphify` runs on the host only. The agent may read
+  `workspace/graphify-out/GRAPH_REPORT.md` but cannot query the CLI.
+- Debian's Python is PEP 668 marked, so any Python tooling needs a venv plus
+  `python3-venv`; plain `pip install` is rejected.
+- `ralph.sh` is ~350 lines, above the 300-line guidance. Split it only when
+  you are already changing the loop body.
+
 # Code Quality Standards
 
 Always apply these standards to all code you write.
