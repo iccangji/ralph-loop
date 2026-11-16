@@ -134,11 +134,14 @@ build_docker_run_command() {
     --user "$(id -u):$(id -g)"
     -e HOME=/home/pi
     -e "PROJECT_ROOT=$workspace"
+    -e "AGENT_DIR=$SCRIPT_DIR/.agent"
     -e "COMPOSE_PROJECT_NAME=$(compose_project_name)"
     -w "$workspace"
     -v "$workspace:$workspace"
     -v "$SCRIPT_DIR/.agent:$SCRIPT_DIR/.agent:ro"
-    -v "$SCRIPT_DIR/.agents:$SCRIPT_DIR/.agents:ro"
+    # Global skill location: pi discovers ~/.agents/skills regardless of cwd.
+    # Project .agents/skills is not reachable, because cwd is the workspace repo.
+    -v "$SCRIPT_DIR/.agents:/home/pi/.agents:ro"
     -v /var/run/docker.sock:/var/run/docker.sock
   )
 

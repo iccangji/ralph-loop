@@ -92,8 +92,10 @@ for i in $(seq 1 $MAX_ITERATIONS); do
 
   # Run Agent with the ralph prompt. PROJECT_ROOT is the workspace path as the
   # host sees it: the container mounts it at the same absolute path so compose
-  # files with relative bind mounts resolve correctly.
+  # files with relative bind mounts resolve correctly. AGENT_DIR points at the
+  # control files, which live next to the workspace, not inside it.
   PROMPT_CONTENT="PROJECT_ROOT=$SCRIPT_DIR/workspace
+AGENT_DIR=$SCRIPT_DIR/.agent
 
 $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
 
@@ -243,8 +245,18 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   DELTA_STR=$(format_delta $ITERATION_DURATION $PREV_ITERATION_TIME)
   PREV_ITERATION_TIME=$ITERATION_DURATION
 
-  # Host updates .agent/tasks.json and LOG.md whenever completed task tags appear
-  for task_id in $(extract_completed_task_ids "$TAG_OUTPUT"); do
+  # Host updates .agent/tasks.json and LOG.md whenever completed task tags appear.
+  # If the agent emitted COMPLETE without a TASK tag and only one incomplete task
+  # was pending, mark that task complete too so tasks.json stays in sync.
+  COMPLETED_TAG_IDS=$(extract_completed_task_ids "$TAG_OUTPUT")
+  if [ -z "$COMPLETED_TAG_IDS" ] && has_complete_tag "$TAG_OUTPUT"; then
+    INCOMPLETE_IDS=$(jq -r '[.[] | select(.passes != true) | .id] | if length == 1 then .[0] else empty end' "$TASKS_FILE" 2>/dev/null)
+    if [ -n "$INCOMPLETE_IDS" ]; then
+      COMPLETED_TAG_IDS="$INCOMPLETE_IDS"
+    fi
+  fi
+
+  for task_id in $COMPLETED_TAG_IDS; do
     mark_task_complete "$task_id"
   done
 

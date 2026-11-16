@@ -23,6 +23,10 @@ is deliberate: compose files with relative bind mounts (`./service-a:/app`) are
 resolved by the host daemon, so a `/workspace` mount would point it at a path
 that does not exist.
 
+`$AGENT_DIR` points to the host's `.agent/` directory, mounted read-only.
+Global skills are mounted to `/home/pi/.agents` so `pi` discovers them
+regardless of the workspace location.
+
 Host is the orchestrator and the only owner of task state. The container is
 throwaway: it starts, does one task, commits, prints a promise tag, and dies.
 
@@ -98,8 +102,9 @@ bash -n ralph.sh && for f in scripts/lib/*.sh; do bash -n "$f"; done
 - **Module change** → source the module in a throwaway dir under `/tmp` with
   `SCRIPT_DIR` set, then call the function and inspect the result.
 - **Mount or command change** → build the image and run `docker run` directly,
-  confirming: `/workspace` writable, `.agent` returns `Read-only file system`,
-  `git config user.name` resolves, provider reachable.
+  confirming: the workspace path is writable, `.agent` returns
+  `Read-only file system`, `git config user.name` resolves, `docker ps` works,
+  provider reachable.
 - **Full loop** → copy the repo to a `/tmp` fixture, `git init` its `workspace/`,
   add one real task, then `./ralph.sh --once`.
 
