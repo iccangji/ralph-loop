@@ -23,6 +23,7 @@ source "$SCRIPT_DIR/scripts/lib/output.sh"
 source "$SCRIPT_DIR/scripts/lib/cleanup.sh"
 source "$SCRIPT_DIR/scripts/lib/promise.sh"
 source "$SCRIPT_DIR/scripts/lib/tasks.sh"
+source "$SCRIPT_DIR/scripts/lib/graphify.sh"
 source "$SCRIPT_DIR/scripts/lib/notify.sh"
 source "$SCRIPT_DIR/scripts/lib/agents.sh"
 source "$SCRIPT_DIR/scripts/lib/display.sh"
@@ -247,6 +248,11 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   TASK_IDS_SEGMENT=""
   if [ -n "$COMPLETED_TASK_IDS" ]; then
     TASK_IDS_SEGMENT=" ${C}│${R} Tasks: ${Y}$COMPLETED_TASK_IDS${R}"
+  fi
+
+  # Refresh the host-side graph so the next iteration reads a current report
+  if [ -n "$COMPLETED_TASK_IDS" ] || has_complete_tag "$TAG_OUTPUT"; then
+    update_workspace_graph
   fi
 
   # Check for completion signal
