@@ -49,7 +49,7 @@
       "TASK-004",
       "TASK-002"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "TASK-006",
