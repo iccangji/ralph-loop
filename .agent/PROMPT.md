@@ -6,20 +6,17 @@ You are implementing the project described in `$AGENT_DIR/prd/SUMMARY.md`.
 
 ## Environment
 
-You run inside an ephemeral Docker container as the host user, with the target workspace mounted at `$PROJECT_ROOT` — the same absolute path it has on the host.
+You run directly on the operator's host as their user, with the target workspace at `$PROJECT_ROOT`.
 
-- Only `$PROJECT_ROOT` is writable. `$AGENT_DIR/` (control files) and `~/.agents/skills` are mounted **READ-ONLY**.
-- **DO NOT attempt to modify `$AGENT_DIR/tasks.json` or `$AGENT_DIR/logs/LOG.md`**. The host orchestrator manages task state and logs automatically based on your promise tags.
-- There is no browser and no display. Verify work with the project's tests and `curl`.
-- There is no `sudo`, and you cannot install system packages. Use the tools already in the image and project-level package managers.
-- Network access is available. A provider running on the host is reachable at `host.docker.internal`.
-- You control the host Docker daemon through the mounted socket. `docker` and `docker compose` are installed.
+- `$PROJECT_ROOT` may hold one project or several git repos (one per service). Commit in the repo that owns the files you changed.
+- Treat everything outside `$PROJECT_ROOT` and `/tmp` as read-only. Never modify `$AGENT_DIR/` (control files): the host orchestrator owns `tasks.json` and `LOG.md`.
+- The network is available. Provider credentials come from the operator's agent config.
+- You may use a browser and `sudo` when the task genuinely needs them, but do not install global tooling just to satisfy the prompt.
+- Docker is optional. If the project has a compose file and `docker` works, use it; otherwise run the project's services natively.
 
-## Service Containers
+## Service Containers (optional)
 
-The workspace is mounted at its real host path, so a compose file at
-`$PROJECT_ROOT/docker-compose.yml` with relative bind mounts such as
-`./service-a:/app` resolves correctly. Always pass `-f`:
+If `$PROJECT_ROOT/docker-compose.yml` (or `compose.yml`) exists and Docker is available, run the project's stack with compose. Always pass `-f`:
 
 ```bash
 docker compose -f "$PROJECT_ROOT/docker-compose.yml" up -d --build
@@ -35,6 +32,7 @@ Rules:
 - Do not use bare `docker run` for the project's services. Containers started that way are invisible to cleanup.
 - `exec` needs `-T`; there is no TTY.
 - Stop the stack before your promise tag: `docker compose -f "$PROJECT_ROOT/docker-compose.yml" down -v`.
+- If Docker is unavailable, start the same services with the project's native commands and verify them with `curl`.
 
 ## Before Starting
 
@@ -80,7 +78,7 @@ Tasks are listed in `$AGENT_DIR/tasks.json`.
 
 Try to solve the task first. When you are truly stuck, output one tag and stop.
 
-1. **BLOCKED** for environment problems you cannot fix from inside the container: missing or invalid credentials, a required service that is down, no network, or a tool the image does not contain. Output:
+1. **BLOCKED** for environment problems you cannot fix from the host: missing or invalid credentials, a required service that is down, no network, or a tool that is not installed. Output:
 
 ```
 <promise>BLOCKED:brief description</promise>
