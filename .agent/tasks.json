@@ -37,7 +37,7 @@
     "specFilePath": ".agent/tasks/TASK-004.json",
     "priority": 4,
     "depends_on": [],
-    "passes": false
+    "passes": true
   },
   {
     "id": "TASK-005",
