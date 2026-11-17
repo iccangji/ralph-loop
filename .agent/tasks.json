@@ -17,7 +17,7 @@
     "depends_on": [
       "TASK-001"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "TASK-003",
