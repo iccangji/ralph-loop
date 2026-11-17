@@ -30,6 +30,7 @@ An array of task summary items representing the execution queue:
     "title": "Short title describing the task",
     "category": "setup | feature | refactor | test",
     "specFilePath": ".agent/tasks/TASK-001.json",
+    "prd": ".agent/prd/PRD.md#section-anchor",
     "priority": 1,
     "depends_on": [],
     "passes": false
@@ -52,6 +53,7 @@ An array of task summary items representing the execution queue:
 - `priority` _(number, optional)_: Priority order (lower integer = higher priority).
 - `depends_on` _(array of strings, optional)_: List of task IDs that must have `passes: true` before this task can be selected. An agent picking tasks must evaluate this dependency chain.
 - `specFilePath` _(string, optional)_: Path to detailed specification file.
+- `prd` _(string, optional)_: Path to PRD doc or section anchor relevant to this task (e.g. `.agent/prd/PRD.md#user-auth`).
 
 ### 2. Task Specification: `$AGENT_DIR/tasks/TASK-{ID}.json`
 
@@ -62,6 +64,7 @@ Comprehensive execution details for a single task:
   "id": "TASK-001",
   "title": "Short title describing the task",
   "category": "setup | feature | refactor | test",
+  "prd": ".agent/prd/PRD.md#section-anchor",
   "description": "Full description of what needs to be implemented and why.",
   "depends_on": [],
   "steps": [
@@ -76,10 +79,12 @@ Comprehensive execution details for a single task:
 }
 ```
 
+- `prd` _(string, optional)_: Context link to the relevant PRD requirement or design spec for this task.
+
 ### 3. Task Execution Rules
 
 - The managing agent defines and reviews tasks in these files, ensuring dependencies (`depends_on`) form a valid Directed Acyclic Graph (DAG).
-- The `pi` agent selects the highest-priority task where `passes: false` AND all task IDs in `depends_on` have `passes: true`.
+- The agent CLI selects the highest-priority task where `passes: false` AND all task IDs in `depends_on` have `passes: true`.
 - Once finished, the agent commits changes in `workspace/` and outputs `<promise>TASK-{ID}:DONE</promise>`.
 - The host flips `passes: true`, updates `LOG.md`, and commits to this repository.
 
