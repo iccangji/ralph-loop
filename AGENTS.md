@@ -1,412 +1,113 @@
 # Ralph Loop
 
-Autonomous agent loop. `ralph.sh` runs an agent CLI (`opencode` by default,
-`pi` as an alternative) directly on the host against the repository in
-`workspace/`, one task per iteration, until every entry in `.agent/tasks.json`
-has `status: "completed"`.
+Autonomous agent loop. `ralph.sh` runs an agent CLI (`opencode` by default, `pi` as an alternative) on the host against `workspace/`, one task per iteration, until every entry in `.agent/tasks.json` has `status: "completed"`.
 
-## Agent Role: Managing Orchestrator
+## Managing Orchestrator Role
 
-The agent reading this repository (running in Antigravity or another harness) acts strictly as a **Manager and Orchestrator** for the autonomous loop:
+The host agent acts strictly as a **Manager and Orchestrator**:
+- **Task Management Only**: Plan, define, refine, and validate `.agent/tasks.json`, `.agent/tasks/TASK-*.json`, and `.agent/prd/`.
+- **No autonomous execution**: Never run `./ralph.sh` unless explicitly ordered by the user.
+- **No direct workspace edits**: Implementation belongs entirely to the worker CLI in `workspace/`.
+- **Priority**: Inspect `.agent/tasks.json` and task specs before answering questions or planning.
 
-- **Scope boundary: Task Management Only**: The manager's duties are strictly limited to planning, defining, refining, and validating `.agent/tasks.json` and `.agent/tasks/TASK-*.json` specs, PRD, and architecture documentation.
-- **Do NOT execute `./ralph.sh` autonomously**: Do NOT run `./ralph.sh` or trigger the agent loop unless the human partner explicitly commands to run it (e.g. "jalankan ralph", "run ralph.sh").
-- **Do NOT directly edit `workspace/` code**: Direct workspace code edits are strictly prohibited. Implementation belongs entirely to the agent CLI running on the host.
-- **Priority #1 is always `.agent/tasks.json`**: Inspect `tasks.json` and `.agent/tasks/TASK-*.json` first before answering questions, planning next steps, or touching control files.
-- **Execution belongs to the agent CLI**: the `opencode` (default) or `pi` process launched by `./ralph.sh` is the execution worker. The manager prepares clear, self-contained task specs with accurate `depends_on` chains, reviews execution logs when finished, and resolves `BLOCKED` or `DECIDE` requests.
+## Task Structure & Hierarchy (1:1:N)
 
-## Task Structure & Lifecycle
+```
+[Grilling Session]
+       │
+       ▼ (1:1)
+[.agent/prd/PRD-{ID}.md]      <-- Frontmatter: id, title, created_at
+       │
+       ▼ (1:N)
+[.agent/tasks/TASK-{ID}.json] <-- Spec with "prd": ".agent/prd/PRD-{ID}.md"
+       │
+       ▼ (Index)
+[.agent/tasks.json]           <-- Minimal queue (id, title, status, priority, depends_on)
+```
 
-The project uses a two-tier task structure stored under `$AGENT_DIR`:
-
-### 1. Task Index: `$AGENT_DIR/tasks.json`
-
-An array of task summary items representing the execution queue:
+### 1. Task Index: `.agent/tasks.json`
+Minimal execution queue. No PRD links here.
 
 ```json
 [
   {
     "id": "TASK-001",
-    "title": "Short title describing the task",
-    "category": "setup | feature | refactor | test",
+    "title": "Scaffold project",
+    "category": "setup",
     "specFilePath": ".agent/tasks/TASK-001.json",
     "priority": 1,
     "depends_on": [],
     "status": "pending"
-  },
-  {
-    "id": "TASK-002",
-    "title": "Feature implementation building on 001",
-    "category": "feature",
-    "specFilePath": ".agent/tasks/TASK-002.json",
-    "priority": 2,
-    "depends_on": ["TASK-001"],
-    "status": "pending"
   }
 ]
 ```
+- `status`: `"pending"` initially. Orchestrator sets `"completed"` on `<promise>TASK-x:DONE</promise>`. Transiently `"in_progress"`.
+- `depends_on`: Required array of task IDs that must be `"completed"` before this task is runnable.
 
-- `id` _(string, required)_: Identifier matching `TASK-[A-Za-z0-9._-]+`.
-- `title` _(string, required)_: Human-readable task title. Appended to `LOG.md` when completed.
-- `status` _(string, required)_: `"pending"` initially. Updated to `"completed"` exclusively by the host orchestrator (`tasks.sh`) when `<promise>TASK-x:DONE</promise>` is observed. Transiently `"in_progress"` while agent is working on it.
-- `priority` _(number, optional)_: Priority order (lower integer = higher priority).
-- `depends_on` _(array of strings, optional)_: List of task IDs that must have `status: "completed"` before this task can be selected. An agent picking tasks must evaluate this dependency chain.
-- `specFilePath` _(string, optional)_: Path to detailed specification file.
-
-### 2. Task Specification: `$AGENT_DIR/tasks/TASK-{ID}.json`
-
-Comprehensive execution details for a single task:
+### 2. Task Spec: `.agent/tasks/TASK-{ID}.json`
+Complete execution instructions for one task.
 
 ```json
 {
   "id": "TASK-001",
-  "title": "Short title describing the task",
-  "category": "setup | feature | refactor | test",
+  "title": "Scaffold project",
+  "category": "setup",
   "prd": ".agent/prd/PRD-001.md",
-  "description": "Full description of what needs to be implemented and why.",
+  "description": "Full description of task.",
   "depends_on": [],
   "steps": [
-    "Step-by-step instructions for implementation",
-    "Specific commands to execute or files to create/edit",
-    "Verification tests to run"
+    "Step 1 with exact commands/files",
+    "Step 2 verification"
   ],
   "acceptance_criteria": [
-    "Specific verifiable assertion 1",
-    "Specific verifiable assertion 2"
+    "Verifiable assertion"
   ]
 }
 ```
+- `prd`: Relative file path to owning PRD document (e.g. `.agent/prd/PRD-001.md`).
 
-- `prd` _(string, optional)_: Relative file path to the source PRD document (e.g. `.agent/prd/PRD-001.md`). Multiple PRDs can coexist across different grilling and planning sessions.
-
-### 3. PRD Structure
-
-Multiple PRD documents can coexist in `$AGENT_DIR/prd/`:
-
-```
-.agent/prd/
-├── PRD-001.md
-├── PRD-002.md
-└── SUMMARY.md
-```
-
-Each PRD file begins with YAML frontmatter containing `id`, `title`, and `created_at`:
+### 3. PRD Files: `.agent/prd/PRD-{ID}.md`
+Multiple PRDs can coexist across sessions. Required YAML frontmatter:
 
 ```markdown
 ---
 id: "PRD-001"
-title: "Simple Notes App (API + Webapp)"
+title: "Feature Title"
 created_at: "2026-11-17T14:30:00Z"
 ---
 
-# Simple Notes App (API + Webapp)
+# Feature Title
 ...
 ```
 
-Tasks reference the PRD file path directly in their `TASK-{ID}.json` spec via `"prd": ".agent/prd/PRD-001.md"`.
+## Task Selection & Execution Rules
 
-### 4. Task Execution Rules
+1. **Deterministic Selection** (`scripts/lib/selector.sh`):
+   - Filters `status == "pending"`
+   - All `depends_on` must have `status == "completed"`
+   - Lowest `priority` number first (array order breaks ties)
+   - Validates DAG (no cycles, no missing refs)
+2. **Execution**: Worker CLI receives task spec in prompt, works in `workspace/`, commits git changes, and outputs `<promise>TASK-{ID}:DONE</promise>`.
+3. **State Update**: Host orchestrator marks `status: "completed"`, appends `.agent/logs/LOG.md`, and commits orchestrator repo.
 
-- The managing agent defines and reviews tasks in these files, ensuring dependencies (`depends_on`) form a valid Directed Acyclic Graph (DAG).
-- **Host deterministically selects the next runnable task** via `scripts/lib/selector.sh`:
-  - Filters tasks with `status: "pending"`
-  - Requires all `depends_on` to have `status: "completed"`
-  - Picks lowest `priority` number; stable array order for ties
-  - Validates no circular deps, no missing refs
-- Agent receives the selected task spec injected in prompt (`$CURRENT_TASK_ID`, `$CURRENT_TASK_TITLE`, `$CURRENT_TASK_DESCRIPTION`, `$CURRENT_TASK_STEPS`, `$CURRENT_TASK_ACCEPTANCE`, `$CURRENT_TASK_PRD`)
-- Once finished, the agent commits changes in `workspace/` and outputs `<promise>TASK-{ID}:DONE</promise>`
-- The host flips `status: "completed"`, updates `LOG.md`, and commits to this repository.
+## Invariants & Guardrails
 
-## Runtime model
+- **Host execution**: Workers run directly on the host (no container/sandbox runtime).
+- **Workspace writes only**: Worker edits remain inside `workspace/`. Host owns `.agent/`.
+- **Git Checkpoint & Rollback**: Each iteration checkpoints `workspace/`. Silent failures roll back automatically unless `--no-rollback` is given.
+- **Circuit Breaker**: Exits with code 7 after `MAX_RETRIES` (default 3) consecutive silent failures.
+- **Exit codes**: `0` = Complete, `1` = Max iterations, `2` = Blocked, `3` = Decide, `7` = Circuit breaker.
 
-```
-host (ralph.sh)                     agent CLI (host process, operator's user)
-  parse args                          cwd = $SCRIPT_DIR/workspace
-  preflight checks                    $SCRIPT_DIR/.agent          (prompt reads it)
-  prepare run state ────────────────→ $SCRIPT_DIR/.agents/skills  (explicit)
-  read JSONL, spinner, preview        temp agent dir / temp session DB
-  mark task done, commit              opencode: --standalone, OPENCODE_DB
-  refresh graph                       pi: copied .pi/, generated trust.json
-  tear down project stack             → <promise>TASK-x:DONE</promise>
-```
-
-There is no sandbox and no mount translation: the agent sees the same paths the
-host does. The workspace may be one git repo or one repo per service; the agent
-commits inside the repo that owns the changed files.
-
-`$AGENT_DIR` is the host's `.agent/` directory. The agent is instructed not to
-write there; opencode additionally enforces workspace-only edits with permission
-rules, while `pi` relies on the prompt.
-
-Each run gets a temporary state directory (`mktemp -d`) that is deleted on exit:
-opencode gets a throwaway `OPENCODE_DB`; pi gets a copy of `.pi/` and a
-`trust.json` that trusts only the workspace.
-
-Host is the orchestrator and the only owner of task state. The agent process is
-throwaway: it starts, does one task, commits, prints a promise tag, and exits.
-
-## Hard invariants
-
-Do not break these without an explicit request.
-
-1. **Agents run on the host.** There is no container or sandbox runtime; do not
-   reintroduce one.
-2. **`opencode` (default) and `pi` are the supported agents.**
-   `SUPPORTED_AGENTS` in `scripts/lib/agents.sh` reflects that.
-3. **Workspace-only writes are a rule, not a mount.** opencode enforces it with
-   `external_directory` permission rules; `pi` follows the prompt. Nothing
-   prevents a determined agent from writing elsewhere.
-4. **Host owns `.agent/tasks.json` and `.agent/logs/LOG.md`.** The managing
-   agent inspects and manages tasks here; the agent is told not to write them.
-   The agent only emits promise tags; `scripts/lib/tasks.sh` flips `status: "completed"`,
-   appends the log, and commits in this repo.
-5. **No direct workspace modifications by managing agent.** All implementation
-   work in `workspace/` must be performed through tasks executed by the agent
-   via `ralph.sh`.
-6. **No autonomous `./ralph.sh` execution.** The managing agent must only prepare
-   and manage tasks; it must never run `./ralph.sh` unless explicitly ordered
-   by the user.
-7. **Browsers and `sudo` are allowed; global tooling installs are not.** Do not
-   add runtime system installs to satisfy a task. Tool additions belong to the
-   project or to `.agents/skills`.
-8. **Agent config is project-owned.** `opencode.jsonc` is tracked at the repo
-   root (model pin plus permission rules). `pi` reads a per-run copy of the
-   gitignored `.pi/` directory.
-9. **`workspace/` is not part of this repo.** A single-repo layout and a
-   multi-repo layout (one repo per service) are both valid.
-10. **Unknown CLI flags must error**, not be ignored.
-11. **Docker is optional.** It is used only for project service stacks and
-    teardown. Never make an agent run depend on Docker being installed.
-12. **Each iteration checkpoints workspace git state.** Failed iterations roll
-    back automatically unless `--no-rollback` is set.
-13. **Circuit breaker stops silent failures.** After `MAX_RETRIES` (default 3)
-    consecutive iterations with no task completed, loop exits with `EXIT_CIRCUIT_BREAKER`.
-
-## Module map
-
-| File                                                                      | Responsibility                                                                  |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `ralph.sh`                                                                | Arg wiring, preflight order, iteration loop, exit codes                         |
-| `scripts/lib/args.sh`                                                     | Flag parsing (`--once`, `-n`, `--agent`, `--`, `--help`)                        |
-| `scripts/lib/constants.sh`                                                | Version, minimum agent versions, `EXIT_*` codes                                 |
-| `scripts/lib/agents.sh`                                                   | Agent registry, version gate, per-run state, command builder                    |
-| `scripts/lib/stack.sh`                                                    | Optional compose project name and stack teardown                                |
-| `scripts/lib/preflight.sh`                                                | Agent/config/provider checks, workspace git check, required files              |
-| `scripts/lib/output.sh`                                                   | Per-agent JSONL parsing, summary extraction, complete-line offset               |
-| `scripts/lib/promise.sh`                                                  | `<promise>` tag detection and extraction                                        |
-| `scripts/lib/tasks.sh`                                                    | `mark_task_complete`, `all_tasks_passed`                                        |
-| `scripts/lib/graphify.sh`                                                 | Host-side `graphify update` after completion                                    |
-| `scripts/lib/cleanup.sh`                                                  | Signal handling, agent process and temp-state cleanup                           |
-| `scripts/lib/{spinner,preview,timing,display,notify,terminal,logging}.sh` | UI only                                                                         |
-
-## Per-iteration flow
-
-1. Build the prompt from `.agent/PROMPT.md` with `PROJECT_ROOT` set to
-   `$SCRIPT_DIR/workspace` and `AGENT_DIR` to `$SCRIPT_DIR/.agent`.
-2. Prepare run state: temp dir, pi config copy or opencode session DB, and the
-   per-run workspace skill link.
-3. **Capture git checkpoint** of all repositories under `workspace/`.
-4. Run the agent CLI directly on the host, capture stdout and stderr to a temp
-   file.
-5. Consume **only complete lines** (`last_complete_line_offset`) so a partial
-   record never loses text.
-6. Feed parsed text to spinner and preview; keep a cleaned transcript in
-   `.agent/history/ITERATION-*.txt`.
-7. On `<promise>TASK-x:DONE</promise>`: mark the task, log it, commit here.
-8. Refresh `workspace/graphify-out/` on the host (skipped if `graphify` absent).
-9. Tear down the project stack (`down_project_stack`) so service containers the
-   agent started do not outlive the iteration.
-10. **Rollback / Circuit Breaker**:
-    - If iteration completed a task (`<promise>TASK-xxx:DONE</promise>`): reset failure counter, accept changes.
-    - If iteration completed **no task** (silent failure, no tag):
-      - Increment consecutive failure counter.
-      - Rollback all workspace repos to checkpoint (`git reset --hard` + `git clean -fd`).
-      - If `--no-rollback`: keep workspace dirty for debugging.
-      - If consecutive failures >= `MAX_RETRIES` (default 3): trip circuit breaker, exit with `EXIT_CIRCUIT_BREAKER` (7).
-11. Stop on `COMPLETE`, `BLOCKED` (exit 2), `DECIDE` (exit 3), circuit breaker (exit 7), or max iterations.
-
-## Circuit Breaker Behavior
-
-- **Default**: 3 consecutive failed iterations (no task completed) triggers circuit breaker.
-- **`--max-retries N`**: Set threshold (0 to disable).
-- **`--no-rollback`**: Skip rollback, keep workspace state for inspection.
-- `BLOCKED` / `DECIDE` / `COMPLETE` tags **do not count** as failures — they are explicit signals.
-- Only **silent iterations** (no task completed, no special tag) increment the counter.
-
-## Verifying changes
-
-There is no test suite and no CI. Verify by hand:
+## Verification
 
 ```bash
 bash -n ralph.sh && for f in scripts/lib/*.sh; do bash -n "$f"; done
 ```
+Test selector/tasks logic against temporary fixtures in `/tmp`.
 
-- **Module change** → source the module in a throwaway dir under `/tmp` with
-  `SCRIPT_DIR` set, then call the function and inspect the result.
-- **Command or state change** → run the built command directly from
-  `workspace/`, confirming: the agent starts, the provider answers, the temp
-  state dir is used, and `opencode debug config` shows the tracked config.
-- **Full loop** → copy the repo to a `/tmp` fixture, `git init` its `workspace/`,
-  add one real task, then `./ralph.sh --once`.
+## Standards Summary
 
-The model behind `9Router/combo1` is slow (a trivial call can take ~70s), so
-full-loop runs need generous timeouts. A short timeout is not a failure signal.
-
-## Known gotchas
-
-- opencode auto-rejects tool calls in non-interactive mode unless `--auto` is
-  passed. Ralph always passes it; the permission rules still win over `--auto`.
-- opencode `--archived` is metadata only. Real isolation needs `--standalone`
-  plus a throwaway `OPENCODE_DB` (what Ralph does), at the cost of ~6-9s per
-  iteration.
-- opencode discovers project config from the cwd and its ancestors, so the
-  repo-root `opencode.jsonc` applies when cwd is `workspace/`. Preflight fails
-  closed if the model pin or `external_directory` rule is not loaded.
-- opencode permission resources match the whole subcommand string with globs,
-  last match wins. `external_directory` does not block absolute paths inside
-  shell commands.
-- pi does not read project `.pi/models.json`; `PI_CODING_AGENT_DIR` is the only
-  lever. Ralph points it at a per-run copy.
-- pi project trust lives in `trust.json` inside the agent dir; Ralph trusts only
-  the workspace path.
-- `COMPOSE_PROJECT_NAME` is injected as `ralph-<hash>` and beats a compose
-  file's `name:`. That is how `down_project_stack` finds the stack; never pass
-  `-p` inside the agent.
-- Skills are canonical in `.agents/skills`; `.agent/skills` and `.claude/skills`
-  are relative symlinks to it. `pi` gets `--skill .agents/skills`; opencode
-  discovers `.opencode/skills`, which Ralph links to the canonical dir for the
-  run and removes afterwards.
-- `.pi/models.json` and `.pi/settings.json` are gitignored. The `.pi/` directory
-  itself is tracked.
-- `graphify` runs on the host only. The agent may read
-  `workspace/graphify-out/GRAPH_REPORT.md` but cannot query the CLI.
-- Debian's Python is PEP 668 marked, so any Python tooling needs a venv plus
-  `python3-venv`; plain `pip install` is rejected.
-- `ralph.sh` is ~390 lines, above the 300-line guidance. Split it only when you
-  are already changing the loop body.
-- **Rollback is per-iteration, not per-task.** If a task spans multiple repos,
-  all are rolled back together. Partial success in one repo is undone.
-- **Circuit breaker only counts silent failures.** `BLOCKED`, `DECIDE`, and
-  `COMPLETE` tags are explicit signals and reset the counter. Only iterations
-  with no task completed and no tag increment the failure counter.
-- **`--no-rollback` keeps the mess.** Use when debugging why the agent failed
-  (e.g., agent modified files but crashed before committing).
-- **`--max-retries 0` disables circuit breaker.** Useful for long-running
-  tasks that may need many iterations, but risks unbounded API costs on stuck
-  tasks.
-
-# Code Quality Standards
-
-Always apply these standards to all code you write.
-
-## Reuse Before Creating
-
-Before writing new code, analyze existing utilities, components, hooks, helpers and tests:
-
-1. **Search first** — grep/glob for similar functionality before implementing
-2. **Extend if close** — if something exists that's 80% of what you need, extend it
-3. **Extract if duplicating** — if you're about to copy-paste, extract to shared module instead
-
-## File Size & Organization
-
-Keep files between **200-300 lines max**. If a file exceeds this:
-
-1. **Split by responsibility** — one module = one concern
-2. **Extract sub-components** — UI pieces that can stand alone should
-3. **Separate logic from presentation** — hooks/utils in their own files
-4. **Group by feature** — co-locate related files, not by type
-
-Signs a file needs splitting:
-
-- Multiple unrelated exports
-- Scrolling to find what you need
-- "Utils" file becoming a junk drawer
-- Component doing data fetching + transformation + rendering
-
-## Task Execution
-
-- **One task per invocation.** The managing agent (running this harness) reads `$AGENT_DIR/tasks.json` and manages context. Do not immediately modify workspace code upon receiving an instruction; read `$AGENT_DIR/tasks.json` and task specs first to understand the execution plan. The agent CLI executes one task per invocation, commits, and reports back via promise tags.
-- **Role of the managing agent.** The host/managing agent acts as a manager and orchestrator for the agent CLI. It does not perform workspace code edits directly when task-driven execution is active; it plans, reviews tasks, and delegates execution to the agent iterations.
-
-## Execution Guidelines
-
-**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
-
-### 1. Think Before Coding
-
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
-
-Before implementing:
-
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
-
-### 2. Simplicity First
-
-**Minimum code that solves the problem. Nothing speculative.**
-
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
-
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
-
-### 3. Surgical Changes
-
-**Touch only what you must. Clean up only your own mess.**
-
-When editing existing code:
-
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
-
-When your changes create orphans:
-
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
-
-The test: Every changed line should trace directly to the user's request.
-
-### 4. Goal-Driven Execution
-
-**Define success criteria. Loop until verified.**
-
-Transform tasks into verifiable goals:
-
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
-
-For multi-step tasks, state a brief plan:
-
-```
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
-```
-
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
-
-## Code Style
-
-1. Prefer writing clear code and use inline comments sparingly
-2. Document methods with block comments at the top of the method
-3. Use Conventional Commit format
-
-## Test To Verify Functionality
-
-If you didn't test it, it doesn't work.
-
-Verify written code by:
-
-- Running unit tests
-- Running end to end tests
-- Checking for type errors
-- Checking for lint errors
-- Smoke testing the running app with `curl` and checking for runtime errors
+- **Simplicity First**: Minimum code that solves the problem. No speculative abstractions.
+- **Surgical Edits**: Touch only what is required for the task.
+- **Verification**: If unverified by tests or commands, it is not complete.
+- **Conventional Commits**: `feat:`, `fix:`, `chore:`.
