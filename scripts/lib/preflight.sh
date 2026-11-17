@@ -1,7 +1,7 @@
 #!/bin/bash
 # Preflight module for ralph.sh
 # Pre-flight checks before starting the main loop
-# Dependencies: constants.sh, logging.sh
+# Dependencies: constants.sh, logging.sh, agents.sh, stack.sh
 
 # Check that the workspace holds at least one git repository. A single repo at
 # the workspace root and a multi-repo layout (one repo per service) both pass.
@@ -21,29 +21,131 @@ check_git_repo() {
   exit 1
 }
 
-# The agent manages service containers through the host daemon, so the socket
-# must exist and be mountable.
-# Usage: check_docker_socket
-check_docker_socket() {
-  if [ ! -S /var/run/docker.sock ]; then
-    log_error "Docker socket not found at /var/run/docker.sock. The agent needs it to manage service containers."
-    exit $EXIT_DOCKER_ERROR
+# The agent runs on the host, so the CLI must be installed and recent enough.
+# Usage: check_agent
+check_agent() {
+  if ! command -v jq >/dev/null 2>&1; then
+    log_error "jq is required but was not found on PATH."
+    exit $EXIT_RUNTIME_ERROR
+  fi
+
+  if ! command -v "$RALPH_AGENT" >/dev/null 2>&1; then
+    log_error "Agent CLI '$RALPH_AGENT' not found on PATH."
+    exit $EXIT_RUNTIME_ERROR
+  fi
+
+  local have
+  local need
+  have=$(agent_version "$RALPH_AGENT")
+  need=$(agent_min_version "$RALPH_AGENT")
+
+  if [ -z "$have" ]; then
+    log_error "Could not read a version from '$RALPH_AGENT --version'."
+    exit $EXIT_RUNTIME_ERROR
+  fi
+
+  if ! version_at_least "$have" "$need"; then
+    log_error "$RALPH_AGENT $have is too old; Ralph needs >= $need."
+    exit $EXIT_RUNTIME_ERROR
   fi
 }
 
-# Compose on the host is what tears the agent's stack down between iterations.
-# Usage: check_compose_available
-check_compose_available() {
-  if docker compose version >/dev/null 2>&1; then
+# Fail closed when opencode does not load the tracked project config: without
+# it the model pin and the permission rules are silently absent.
+# Usage: check_opencode_config
+check_opencode_config() {
+  [ "$RALPH_AGENT" = "opencode" ] || return 0
+
+  local resolved
+  if ! resolved=$(cd "$SCRIPT_DIR/workspace" && timeout 30 opencode debug config 2>/dev/null); then
+    log_error "Could not read opencode config ('opencode debug config' failed)."
+    exit $EXIT_RUNTIME_ERROR
+  fi
+
+  if ! printf '%s' "$resolved" | jq -e --arg cfg "$SCRIPT_DIR/opencode.jsonc" '
+    any(.[]?;
+      .type == "document"
+      and .path == $cfg
+      and (.info.model.providerID // "") != ""
+      and (.info.model.model // "") != ""
+      and ((.info.permissions // []) | any(.action == "external_directory" and .effect == "deny"))
+    )
+  ' >/dev/null 2>&1; then
+    log_error "opencode did not load $SCRIPT_DIR/opencode.jsonc from the workspace."
+    log_error "Refusing to run without the model pin and permission rules."
+    exit $EXIT_RUNTIME_ERROR
+  fi
+}
+
+# Provider base URLs the active agent will talk to, one per line.
+provider_base_urls() {
+  case "$RALPH_AGENT" in
+    opencode)
+      local config_home="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
+      local candidate
+      for candidate in "$config_home/opencode.jsonc" "$config_home/opencode.json"; do
+        [ -f "$candidate" ] || continue
+        jq -r '.provider[]?.options.baseURL // empty' "$candidate" 2>/dev/null
+      done
+      ;;
+    pi)
+      local models_file="$SCRIPT_DIR/.pi/models.json"
+      [ -f "$models_file" ] || return 0
+      jq -r '.providers[]?.baseUrl // empty' "$models_file" 2>/dev/null
+      ;;
+  esac | awk '!seen[$0]++'
+}
+
+# Probe the provider before the loop starts: a slow or dead endpoint is the
+# expensive failure mode, and the agent cannot report it until it is stuck.
+# Usage: check_provider_reachable
+check_provider_reachable() {
+  if ! command -v curl >/dev/null 2>&1; then
+    log_warn "curl not found; skipping provider reachability check"
     return 0
   fi
 
-  if find_compose_file >/dev/null 2>&1; then
-    log_error "docker compose is required to tear down the project stack, but it is not available."
-    exit $EXIT_DOCKER_ERROR
+  local urls
+  urls=$(provider_base_urls)
+
+  if [ -z "$urls" ]; then
+    log_warn "No provider base URL found; skipping reachability check"
+    return 0
   fi
 
-  log_warn "docker compose not found; the agent cannot start or stop service containers."
+  local url
+  local failed=()
+  while IFS= read -r url; do
+    [ -n "$url" ] || continue
+    log_info "Checking provider reachability ($url)..."
+    if ! curl -s -o /dev/null --max-time 5 "${url%/}/models" >/dev/null 2>&1; then
+      failed+=("$url")
+    fi
+  done <<< "$urls"
+
+  if [ ${#failed[@]} -eq 0 ]; then
+    return 0
+  fi
+
+  log_error "Cannot reach provider: ${failed[*]}"
+  log_error "Check the base URL and that the provider is running."
+  exit $EXIT_PROVIDER_ERROR
+}
+
+# Docker is optional. Warn when the project has a compose file but the host
+# cannot use it, so a later failure is not a surprise.
+# Usage: check_stack_capability
+check_stack_capability() {
+  find_compose_file >/dev/null 2>&1 || return 0
+
+  if ! command -v docker >/dev/null 2>&1; then
+    log_warn "Project has a compose file but docker is not installed; services must run natively."
+    return 0
+  fi
+
+  if ! docker compose version >/dev/null 2>&1; then
+    log_warn "docker compose is not available; services must run natively."
+  fi
 }
 
 # Ensure history directory exists for storing iteration logs
@@ -71,8 +173,13 @@ check_required_files() {
     missing_required=true
   fi
 
-  if [ ! -f "$SCRIPT_DIR/.pi/models.json" ]; then
-    log_error "Required file missing: .pi/models.json"
+  if [ "$RALPH_AGENT" = "pi" ] && [ ! -f "$SCRIPT_DIR/.pi/models.json" ]; then
+    log_error "Required file missing for pi: .pi/models.json"
+    missing_required=true
+  fi
+
+  if [ "$RALPH_AGENT" = "opencode" ] && [ ! -f "$SCRIPT_DIR/opencode.jsonc" ]; then
+    log_error "Required file missing for opencode: opencode.jsonc"
     missing_required=true
   fi
 

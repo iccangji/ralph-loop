@@ -56,16 +56,12 @@ truncate_line() {
   fi
 }
 
-# Run a command with a pseudo-TTY and record its output to a file.
-# util-linux script needs -c, BSD/macOS script takes the command positionally.
-# Usage: run_in_pseudo_tty <output-file> <command>
-run_in_pseudo_tty() {
+# Run an agent command on the host, capturing stdout and stderr to a file.
+# The loop reads the JSONL output while the command runs.
+# Usage: run_agent_command <output-file> <command>
+run_agent_command() {
   local output_file="$1"
   local command="$2"
 
-  if script --help 2>&1 | grep -q -- '--command'; then
-    script -q -c "$command" "$output_file"
-  else
-    script -q "$output_file" bash -c "$command"
-  fi
+  bash -c "$command" > "$output_file" 2>&1
 }

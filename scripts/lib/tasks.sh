@@ -1,6 +1,6 @@
 #!/bin/bash
 # Task state module for ralph.sh
-# Host owns .agent/tasks.json and .agent/logs/LOG.md; the container sees them read-only.
+# Host owns .agent/tasks.json and .agent/logs/LOG.md; the agent cannot write them.
 # Dependencies: constants.sh, logging.sh
 
 TASKS_FILE="$SCRIPT_DIR/.agent/tasks.json"

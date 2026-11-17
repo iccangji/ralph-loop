@@ -33,11 +33,55 @@ parse_pi_json_content() {
     else empty end' 2>/dev/null
 }
 
+# Extract readable text from one opencode JSON event.
+# opencode emits complete text parts (no deltas) and tool calls under
+# part.state.input, so this mirrors the pi labels used by detect_step().
+# Usage: parse_opencode_json_content "<json line>"
+parse_opencode_json_content() {
+  local json_line="$1"
+
+  if ! command -v jq &>/dev/null; then
+    return 0
+  fi
+
+  printf '%s' "$json_line" | jq -r '
+    if .type == "text" then
+      (.part.text // empty)
+    elif .type == "tool_use" then
+      (.part.tool // "") as $tool
+      | (.part.state.input // {}) as $args
+      | if $tool == "bash" or $tool == "shell" then "Bash command=" + ($args.command // "")
+        elif $tool == "write" then "Write file_path=" + ($args.path // $args.filePath // "")
+        elif $tool == "edit" then "Edit file_path=" + ($args.path // $args.filePath // "")
+        elif $tool == "read" then "Read file_path=" + ($args.path // $args.filePath // "")
+        elif $tool == "grep" then "Grep pattern=" + ($args.pattern // "")
+        elif $tool == "glob" then "Glob pattern=" + ($args.pattern // "")
+        elif $tool == "ls" then "LS path=" + ($args.path // "")
+        elif $tool == "skill" then "Skill id=" + ($args.id // "")
+        else ($tool + " " + ($args | to_entries | map(.key + "=" + (.value | tostring)) | join(" ")))
+        end
+    else empty end' 2>/dev/null
+}
+
 # Parse JSON stream and extract text content
-# Handles pi JSON mode and Agent's stream-json format
+# Dispatches on the active agent, then falls back to generic stream-json.
 parse_json_content() {
   local json_line="$1"
   local pi_text
+
+  if [ "${RALPH_AGENT:-pi}" = "opencode" ]; then
+    local opencode_text
+    opencode_text=$(parse_opencode_json_content "$json_line")
+    if [ -n "$opencode_text" ]; then
+      printf '%s\n' "$opencode_text"
+      return
+    fi
+    # Non-JSON lines (stderr warnings) still belong in the preview.
+    if ! echo "$json_line" | grep -q '^{'; then
+      echo "$json_line"
+    fi
+    return
+  fi
 
   pi_text=$(parse_pi_json_content "$json_line")
   if [ -n "$pi_text" ]; then
@@ -203,10 +247,17 @@ extract_final_summary() {
     fi
   fi
 
+  # opencode JSON mode: the final assistant text part is the summary.
+  # Text events carry complete parts, so the last one is the closing message.
+  if [ -z "$summary" ] && [ "${RALPH_AGENT:-pi}" = "opencode" ] && command -v jq &> /dev/null; then
+    summary=$(jq -R 'fromjson? // empty' "$output_file" 2>/dev/null | jq -rs '
+      [ .[] | select(.type == "text") | .part.text ] | last // ""' 2>/dev/null)
+  fi
+
   # pi JSON mode: use the text of the last assistant message.
   # The `script` wrapper adds a header and CRLF endings, so records are parsed
   # one line at a time and non-JSON lines are dropped before the aggregate pass.
-  if [ -z "$summary" ] && command -v jq &> /dev/null; then
+  if [ -z "$summary" ] && [ "${RALPH_AGENT:-pi}" = "pi" ] && command -v jq &> /dev/null; then
     summary=$(jq -R 'fromjson? // empty' "$output_file" 2>/dev/null | jq -rs '
       [ .[] | select(.type == "message_end" and .message.role == "assistant") ] | last
       | if . == null then ""

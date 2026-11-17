@@ -1,16 +1,14 @@
 #!/bin/bash
 # Constants module for ralph.sh
-# Contains: Colors, paths, version, exit codes
+# Contains: Colors, paths, version, exit codes, agent minimum versions
 
 # Version
-VERSION="1.0.0"
+VERSION="2.0.0"
 
-# Pinned pi coding agent version and the Docker image Ralph builds from it.
-# Bump IMAGE_REVISION whenever Dockerfile.pi changes: ensure_pi_image only
-# builds when the tag is missing, so a stale tag silently keeps the old image.
-PI_VERSION="1.5.2"
-IMAGE_REVISION="1"
-PI_IMAGE="ralph-pi:${PI_VERSION}-${IMAGE_REVISION}"
+# Minimum agent CLI versions. Agents run on the host, so the installed binary
+# decides the version; Ralph refuses anything older than these floors.
+MIN_PI_VERSION="1.4.0"
+MIN_OPENCODE_VERSION="1.19.0"
 
 # Colors (short syntax)
 Y='\033[33m'        # Yellow
@@ -28,6 +26,6 @@ EXIT_COMPLETE=0
 EXIT_MAX_ITERATIONS=1
 EXIT_BLOCKED=2
 EXIT_DECIDE=3
-EXIT_DOCKER_ERROR=4
+EXIT_RUNTIME_ERROR=4
 EXIT_AUTH_ERROR=5
 EXIT_PROVIDER_ERROR=6

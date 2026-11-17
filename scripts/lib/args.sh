@@ -9,7 +9,7 @@
 parse_arguments() {
   MAX_ITERATIONS=10
   ONCE_FLAG=false
-  RALPH_AGENT="pi"
+  RALPH_AGENT="${DEFAULT_AGENT:-opencode}"
   AGENT_EXTRA_ARGS=()
 
   while [[ $# -gt 0 ]]; do
