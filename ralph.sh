@@ -13,7 +13,7 @@ HISTORY_DIR="$SCRIPT_DIR/.agent/history"
 
 source "$SCRIPT_DIR/scripts/lib/constants.sh"
 source "$SCRIPT_DIR/scripts/lib/logging.sh"
-source "$SCRIPT_DIR/scripts/lib/docker.sh"
+source "$SCRIPT_DIR/scripts/lib/stack.sh"
 source "$SCRIPT_DIR/scripts/lib/preflight.sh"
 source "$SCRIPT_DIR/scripts/lib/timing.sh"
 source "$SCRIPT_DIR/scripts/lib/terminal.sh"
@@ -54,7 +54,6 @@ trap handle_interrupt INT
 # Parse arguments (sets MAX_ITERATIONS, ONCE_FLAG, RALPH_AGENT, AGENT_EXTRA_ARGS)
 parse_arguments "$@"
 RALPH_AGENT_NAME=$(agent_display_name "$RALPH_AGENT")
-RALPH_CONTAINER_NAME=$(build_container_name "$RALPH_AGENT" "$SCRIPT_DIR")
 
 # Initialize progress file if it doesn't exist
 if [ ! -f "$PROGRESS_FILE" ]; then
@@ -69,14 +68,22 @@ check_git_repo
 check_required_files
 check_history_dir
 check_ansi_support
-ensure_docker_available
-check_docker_socket
-check_compose_available
-ensure_pi_image
-check_pi_provider_reachable
+check_agent
+check_opencode_config
+check_provider_reachable
+check_stack_capability
+
+# Per-run agent state (config copies, sessions) and the workspace skill link.
+prepare_agent_state
+prepare_workspace_skills
+
+# Stable compose project name for this checkout. The agent inherits it, so
+# down_project_stack can find the containers it started.
+export COMPOSE_PROJECT_NAME
+COMPOSE_PROJECT_NAME=$(compose_project_name)
 
 show_ralph
-echo -e " ${C}Starting Ralph${R} ・ ${Y}v$VERSION${R} ・ Agent: ${Y}$RALPH_AGENT_NAME${R} ・ Container: ${Y}$RALPH_CONTAINER_NAME${R} ・ Max iterations: ${Y}$MAX_ITERATIONS${R}"
+echo -e " ${C}Starting Ralph${R} ・ ${Y}v$VERSION${R} ・ Agent: ${Y}$RALPH_AGENT_NAME${R} ・ Max iterations: ${Y}$MAX_ITERATIONS${R}"
 echo ""
 
 for i in $(seq 1 $MAX_ITERATIONS); do
@@ -90,10 +97,10 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   echo -e "${B}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
   echo -e ""
 
-  # Run Agent with the ralph prompt. PROJECT_ROOT is the workspace path as the
-  # host sees it: the container mounts it at the same absolute path so compose
-  # files with relative bind mounts resolve correctly. AGENT_DIR points at the
-  # control files, which live next to the workspace, not inside it.
+  # Run Agent with the ralph prompt. PROJECT_ROOT is the workspace path on the
+  # host: the agent runs there directly, so relative paths and git commits land
+  # in the service repos. AGENT_DIR points at the control files, which live
+  # next to the workspace, not inside it.
   PROMPT_CONTENT="PROJECT_ROOT=$SCRIPT_DIR/workspace
 AGENT_DIR=$SCRIPT_DIR/.agent
 
@@ -109,12 +116,12 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   OUTPUT_FILE=$(mktemp)
   FULL_OUTPUT_FILE=$(mktemp)
 
-  # Use script to provide a pseudo-TTY for docker run.
-  # This is the main command loop.
+  # Run the agent directly on the host. Output is JSONL on stdout; stderr is
+  # captured too so provider and permission warnings reach the transcript.
   export PROMPT_CONTENT
 
-  AGENT_COMMAND=$(build_agent_command "$RALPH_CONTAINER_NAME")
-  run_in_pseudo_tty "$OUTPUT_FILE" "$AGENT_COMMAND" </dev/null >/dev/null 2>&1 &
+  AGENT_COMMAND=$(build_agent_command)
+  run_agent_command "$OUTPUT_FILE" "$AGENT_COMMAND" &
   AGENT_PID=$!
 
   # Track position in output file for incremental reading
@@ -169,30 +176,32 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
 
   OUTPUT=$(cat "$FULL_OUTPUT_FILE" 2>/dev/null || cat "$OUTPUT_FILE")
 
-  # Check for Docker daemon not ready error
-  if echo "$OUTPUT" | grep -q "docker daemon not ready"; then
-    stop_spinner
-    clear_rolling_preview
-    echo ""
-    echo -e "${RD}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
-    echo -e "  ❌ ${RD}Docker Error${R}"
-    echo -e "  Docker daemon is not ready. Please ensure Docker is running."
-    echo -e "${RD}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
-    rm -f "$OUTPUT_FILE" "$FULL_OUTPUT_FILE"
-    exit $EXIT_DOCKER_ERROR
+  # Surface provider and authentication failures early. opencode emits a
+  # {"type":"error"} event; pi prints an API-key error and stops.
+  PROVIDER_ERROR_MESSAGE=""
+  if [ -f "$OUTPUT_FILE" ] && command -v jq &>/dev/null; then
+    PROVIDER_ERROR_MESSAGE=$(jq -R 'fromjson? // empty' "$OUTPUT_FILE" 2>/dev/null \
+      | jq -rs '[ .[] | select(.type == "error") | .error.message ] | last // ""' 2>/dev/null)
   fi
 
-  # Check for invalid API key / authentication error
-  if echo "$OUTPUT" | grep -q "Invalid API key"; then
+  if [ -n "$PROVIDER_ERROR_MESSAGE" ] || echo "$OUTPUT" | grep -qi "Invalid API key"; then
     stop_spinner
     clear_rolling_preview
     echo ""
-    echo -e "${RD}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
-    echo -e "  ❌ ${RD}Authentication Error${R}"
-    echo -e "  Invalid API key or unreachable provider in .pi/models.json."
-    echo -e "${RD}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
+    echo -e "${RD}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
+    echo -e "  ❌ ${RD}Agent Error${R}"
+    echo -e "${RD}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
+    if [ -n "$PROVIDER_ERROR_MESSAGE" ]; then
+      echo -e "  $PROVIDER_ERROR_MESSAGE"
+    else
+      echo -e "  Invalid API key or unreachable provider."
+    fi
     rm -f "$OUTPUT_FILE" "$FULL_OUTPUT_FILE"
-    exit $EXIT_AUTH_ERROR
+    if echo "$PROVIDER_ERROR_MESSAGE $OUTPUT" \
+      | grep -qiE 'api key|auth|unauthorized|forbidden|401|403'; then
+      exit $EXIT_AUTH_ERROR
+    fi
+    exit $EXIT_PROVIDER_ERROR
   fi
 
   # Save cleaned output to history file (SESSION_ID prevents overwrites between runs)
@@ -271,8 +280,8 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
     update_workspace_graph
   fi
 
-  # Containers the agent started are siblings on the host, not children of its
-  # own container, so they outlive it until the project stack is torn down.
+  # Service containers the agent started are siblings, not children of the
+  # loop, so they outlive it until the project stack is torn down.
   down_project_stack
 
   # Check for completion signal
