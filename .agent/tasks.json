@@ -60,6 +60,6 @@
     "depends_on": [
       "TASK-005"
     ],
-    "passes": false
+    "passes": true
   }
 ]

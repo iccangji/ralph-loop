@@ -16,3 +16,4 @@
 - 2026-11-17 11:58 — TASK-003 Write API tests with Vitest + supertest
 - 2026-11-17 12:00 — TASK-004 Scaffold React Vite webapp
 - 2026-11-17 12:15 — TASK-005 Build UI CRUD and wire to API- 2026-11-17 12:07 — TASK-005 Build UI CRUD and wire to API
+- 2026-11-17 12:15 — TASK-006 Configure Docker Compose for dev with API proxy
