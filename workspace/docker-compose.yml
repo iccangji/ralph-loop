@@ -1,0 +1,32 @@
+services:
+  api:
+    build:
+      context: ./simple-notes-api
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+    volumes:
+      - ./simple-notes-api/notes.db:/app/notes.db
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  webapp:
+    build:
+      context: ./simple-notes-webapp
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://api:3001
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - ./simple-notes-webapp:/app
+      - /app/node_modules

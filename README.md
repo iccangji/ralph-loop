@@ -26,7 +26,7 @@ Ralph runs an AI coding agent CLI directly on the host in an autonomous loop to 
 │   ├── STEERING.md         # Critical steering instructions
 │   ├── tasks.json          # Master task list (host-owned)
 │   ├── tasks/              # Detailed task specs TASK-{ID}.json
-│   ├── prd/                # PRD.md and SUMMARY.md
+│   ├── prd/                # PRD-{ID}.md and SUMMARY.md
 │   ├── logs/
 │   │   └── LOG.md          # Progress log (host-managed)
 │   └── history/            # Raw iteration transcripts
@@ -82,13 +82,16 @@ Ralph runs an AI coding agent CLI directly on the host in an autonomous loop to 
 ## Safety Features
 
 ### Automatic Rollback
+
 Each iteration checkpoints all git repositories in `workspace/`. If an iteration completes without a valid `<promise>TASK-xxx:DONE</promise>` tag, Ralph automatically restores every repo to its checkpoint:
+
 - `git reset --hard <checkpoint>` — restores committed files
 - `git clean -fd` — removes untracked files
 
 Use `--no-rollback` to keep the workspace state for debugging.
 
 ### Circuit Breaker
+
 If 3 consecutive iterations complete without any task being completed (no `<promise>TASK-xxx:DONE</promise>`, no `<promise>COMPLETE</promise>`, no `<promise>BLOCKED</promise>`, no `<promise>DECIDE</promise>`), Ralph trips the circuit breaker and exits with code 7. This prevents unbounded retries on stuck tasks.
 
 - `--max-retries N`: Adjust threshold (0 = disabled).
