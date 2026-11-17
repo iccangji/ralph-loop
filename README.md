@@ -36,7 +36,6 @@ Ralph runs an AI coding agent CLI directly on the host in an autonomous loop to 
 │   └── mcp.json            # Project MCP servers
 ├── opencode.jsonc          # opencode model pin and permission rules
 ├── workspace/              # Target project
-│   └── docker-compose.yml  # Optional: services the agent starts, inspects, and tears down
 └── scripts/
     └── lib/                # Runner modules
 ```
