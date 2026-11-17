@@ -82,6 +82,9 @@ check_stack_capability
 prepare_agent_state
 prepare_workspace_skills
 
+# Reset any orphaned in_progress tasks from previous crash/interrupt
+reset_in_progress
+
 # Stable compose project name for this checkout. The agent inherits it, so
 # down_project_stack can find the containers it started.
 export COMPOSE_PROJECT_NAME
@@ -124,6 +127,9 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   TASK_PRD=$(echo "$TASK_SPEC" | jq -r '.prd // empty')
 
   echo -e "${C}  → Selected task: ${Y}$TASK_ID${R} - ${Y}$TASK_TITLE${R}"
+
+  # Mark task as in_progress (crash recovery)
+  set_task_in_progress "$TASK_ID"
 
   # Run Agent with the ralph prompt + selected task spec. PROJECT_ROOT is the workspace path on the
   # host: the agent runs there directly, so relative paths and git commits land
@@ -296,7 +302,7 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   # was pending, mark that task complete too so tasks.json stays in sync.
   COMPLETED_TAG_IDS=$(extract_completed_task_ids "$TAG_OUTPUT")
   if [ -z "$COMPLETED_TAG_IDS" ] && has_complete_tag "$TAG_OUTPUT"; then
-    INCOMPLETE_IDS=$(jq -r '[.[] | select(.passes != true) | .id] | if length == 1 then .[0] else empty end' "$TASKS_FILE" 2>/dev/null)
+    INCOMPLETE_IDS=$(jq -r '[.[] | select(.status != "completed" and .passes != true) | .id] | if length == 1 then .[0] else empty end' "$TASKS_FILE" 2>/dev/null)
     if [ -n "$INCOMPLETE_IDS" ]; then
       COMPLETED_TAG_IDS="$INCOMPLETE_IDS"
     fi

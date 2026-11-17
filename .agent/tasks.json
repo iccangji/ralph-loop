@@ -6,7 +6,7 @@
     "specFilePath": ".agent/tasks/TASK-001.json",
     "priority": 1,
     "depends_on": [],
-    "passes": true
+    "status": "completed"
   },
   {
     "id": "TASK-002",
@@ -17,7 +17,7 @@
     "depends_on": [
       "TASK-001"
     ],
-    "passes": true
+    "status": "completed"
   },
   {
     "id": "TASK-003",
@@ -28,7 +28,7 @@
     "depends_on": [
       "TASK-002"
     ],
-    "passes": true
+    "status": "completed"
   },
   {
     "id": "TASK-004",
@@ -37,7 +37,7 @@
     "specFilePath": ".agent/tasks/TASK-004.json",
     "priority": 4,
     "depends_on": [],
-    "passes": true
+    "status": "completed"
   },
   {
     "id": "TASK-005",
@@ -49,7 +49,7 @@
       "TASK-004",
       "TASK-002"
     ],
-    "passes": true
+    "status": "completed"
   },
   {
     "id": "TASK-006",
@@ -60,6 +60,6 @@
     "depends_on": [
       "TASK-005"
     ],
-    "passes": true
+    "status": "completed"
   }
 ]

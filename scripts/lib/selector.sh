@@ -44,15 +44,17 @@ select_next_task() {
   validate_task_graph "$tasks_file" || return 1
 
   # Find the highest-priority runnable task
-  # Runnable: passes=false AND all depends_on have passes=true
+  # Runnable: status == "pending" AND all depends_on have status == "completed"
+  # (also accept legacy .passes field for backwards compatibility)
   local next_id
   next_id=$(jq -r '
-    # First, build a lookup of which tasks have passes=true
+    # First, build a lookup of which tasks are completed
     . as $tasks
-    | ($tasks | map({(.id): .passes}) | add) as $passed
+    | ($tasks | map({(.id): (.status == "completed" or .passes == true)}) | add) as $completed
     # Filter runnable tasks
-    | map(select(.passes == false
-        and ( (.depends_on // []) | all( $passed[.] == true ) )
+    | map(select(
+        (.status == "pending" or .passes == false)
+        and ( (.depends_on // []) | all( $completed[.] == true ) )
     ))
     # Sort by priority asc, then by original array order (stable)
     | sort_by(.priority)

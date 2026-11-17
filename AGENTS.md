@@ -3,7 +3,7 @@
 Autonomous agent loop. `ralph.sh` runs an agent CLI (`opencode` by default,
 `pi` as an alternative) directly on the host against the repository in
 `workspace/`, one task per iteration, until every entry in `.agent/tasks.json`
-has `passes: true`.
+has `status: "completed"`.
 
 ## Agent Role: Managing Orchestrator
 
@@ -33,7 +33,7 @@ An array of task summary items representing the execution queue:
     "prd": ".agent/prd/PRD.md#section-anchor",
     "priority": 1,
     "depends_on": [],
-    "passes": false
+    "status": "pending"
   },
   {
     "id": "TASK-002",
@@ -42,16 +42,16 @@ An array of task summary items representing the execution queue:
     "specFilePath": ".agent/tasks/TASK-002.json",
     "priority": 2,
     "depends_on": ["TASK-001"],
-    "passes": false
+    "status": "pending"
   }
 ]
 ```
 
 - `id` _(string, required)_: Identifier matching `TASK-[A-Za-z0-9._-]+`.
 - `title` _(string, required)_: Human-readable task title. Appended to `LOG.md` when completed.
-- `passes` _(boolean, required)_: `false` initially. Updated to `true` exclusively by the host orchestrator (`tasks.sh`) when `<promise>TASK-x:DONE</promise>` is observed.
+- `status` _(string, required)_: `"pending"` initially. Updated to `"completed"` exclusively by the host orchestrator (`tasks.sh`) when `<promise>TASK-x:DONE</promise>` is observed. Transiently `"in_progress"` while agent is working on it.
 - `priority` _(number, optional)_: Priority order (lower integer = higher priority).
-- `depends_on` _(array of strings, optional)_: List of task IDs that must have `passes: true` before this task can be selected. An agent picking tasks must evaluate this dependency chain.
+- `depends_on` _(array of strings, optional)_: List of task IDs that must have `status: "completed"` before this task can be selected. An agent picking tasks must evaluate this dependency chain.
 - `specFilePath` _(string, optional)_: Path to detailed specification file.
 - `prd` _(string, optional)_: Path to PRD doc or section anchor relevant to this task (e.g. `.agent/prd/PRD.md#user-auth`).
 
@@ -85,13 +85,13 @@ Comprehensive execution details for a single task:
 
 - The managing agent defines and reviews tasks in these files, ensuring dependencies (`depends_on`) form a valid Directed Acyclic Graph (DAG).
 - **Host deterministically selects the next runnable task** via `scripts/lib/selector.sh`:
-  - Filters tasks with `passes: false`
-  - Requires all `depends_on` to have `passes: true`
+  - Filters tasks with `status: "pending"`
+  - Requires all `depends_on` to have `status: "completed"`
   - Picks lowest `priority` number; stable array order for ties
   - Validates no circular deps, no missing refs
 - Agent receives the selected task spec injected in prompt (`$CURRENT_TASK_ID`, `$CURRENT_TASK_TITLE`, `$CURRENT_TASK_DESCRIPTION`, `$CURRENT_TASK_STEPS`, `$CURRENT_TASK_ACCEPTANCE`, `$CURRENT_TASK_PRD`)
 - Once finished, the agent commits changes in `workspace/` and outputs `<promise>TASK-{ID}:DONE</promise>`
-- The host flips `passes: true`, updates `LOG.md`, and commits to this repository.
+- The host flips `status: "completed"`, updates `LOG.md`, and commits to this repository.
 
 ## Runtime model
 
@@ -134,7 +134,7 @@ Do not break these without an explicit request.
    prevents a determined agent from writing elsewhere.
 4. **Host owns `.agent/tasks.json` and `.agent/logs/LOG.md`.** The managing
    agent inspects and manages tasks here; the agent is told not to write them.
-   The agent only emits promise tags; `scripts/lib/tasks.sh` flips `passes`,
+   The agent only emits promise tags; `scripts/lib/tasks.sh` flips `status: "completed"`,
    appends the log, and commits in this repo.
 5. **No direct workspace modifications by managing agent.** All implementation
    work in `workspace/` must be performed through tasks executed by the agent

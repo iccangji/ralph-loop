@@ -67,7 +67,7 @@ Your workflow:
 4. All checks must pass. If you broke an unrelated test, fix it before continuing.
 5. Commit changes to git with the Conventional Commit format.
 6. Write a task report to `$AGENT_DIR/reports/${CURRENT_TASK_ID}.md` documenting what was implemented, files touched, verification steps performed, and any notes for the operator.
-7. Output `<promise>${CURRENT_TASK_ID}:DONE</promise>`. If every task in `$AGENT_DIR/tasks.json` now passes, ALSO output `<promise>COMPLETE</promise>`:
+7. Output `<promise>${CURRENT_TASK_ID}:DONE</promise>`. If every task in `$AGENT_DIR/tasks.json` now has `status: "completed"`, ALSO output `<promise>COMPLETE</promise>`:
    ```
    <promise>${CURRENT_TASK_ID}:DONE</promise>
    ```

@@ -10,12 +10,13 @@ bare_task_id() {
   printf '%s' "${1#TASK-}"
 }
 
-# Return success when at least one task exists and every task has passes: true.
+# Return success when at least one task exists and every task has status: "completed".
 all_tasks_passed() {
-  jq -e 'length > 0 and all(.passes == true)' "$TASKS_FILE" >/dev/null 2>&1
+  local file="${1:-$TASKS_FILE}"
+  jq -e 'length > 0 and all(.status == "completed" or .passes == true)' "$file" >/dev/null 2>&1
 }
 
-# Set passes: true for one task, append a log entry, and commit both files.
+# Set status: "completed" for one task, append a log entry, and commit both files.
 # Usage: mark_task_complete <task-id>
 mark_task_complete() {
   local id
@@ -29,7 +30,7 @@ mark_task_complete() {
 
   local updated
   updated=$(jq --arg id "$id" \
-    'map(if (.id | tostring | ltrimstr("TASK-")) == $id then .passes = true else . end)' \
+    'map(if (.id | tostring | ltrimstr("TASK-")) == $id then .status = "completed" | del(.passes) else . end)' \
     "$TASKS_FILE" 2>/dev/null) || return 0
   [ -n "$updated" ] || return 0
   printf '%s\n' "$updated" > "$TASKS_FILE"
@@ -39,4 +40,30 @@ mark_task_complete() {
 
   git -C "$SCRIPT_DIR" add "$TASKS_FILE" "$PROGRESS_FILE" >/dev/null 2>&1 || true
   git -C "$SCRIPT_DIR" commit -q -m "chore(agent): mark TASK-${id} done" >/dev/null 2>&1 || true
+}
+
+# Mark a task as in_progress (in-memory/on-disk without git commit)
+# Usage: set_task_in_progress <task-id>
+set_task_in_progress() {
+  local id
+  id=$(bare_task_id "$1")
+  [ -n "$id" ] || return 0
+
+  local updated
+  updated=$(jq --arg id "$id" \
+    'map(if (.id | tostring | ltrimstr("TASK-")) == $id then .status = "in_progress" else . end)' \
+    "$TASKS_FILE" 2>/dev/null) || return 0
+  [ -n "$updated" ] || return 0
+  printf '%s\n' "$updated" > "$TASKS_FILE"
+}
+
+# Reset any orphaned in_progress tasks back to pending (e.g. after crash or interrupt)
+# Usage: reset_in_progress
+reset_in_progress() {
+  [ -f "$TASKS_FILE" ] || return 0
+  local updated
+  updated=$(jq 'map(if .status == "in_progress" then .status = "pending" else . end)' \
+    "$TASKS_FILE" 2>/dev/null) || return 0
+  [ -n "$updated" ] || return 0
+  printf '%s\n' "$updated" > "$TASKS_FILE"
 }

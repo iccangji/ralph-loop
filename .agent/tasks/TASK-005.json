@@ -3,7 +3,10 @@
   "title": "Build UI CRUD and wire to API",
   "category": "feature",
   "description": "Implement complete single-page React UI with note list, view detail, create form, edit inline/modal, delete confirmation, connected to Express API.",
-  "depends_on": ["TASK-004", "TASK-002"],
+  "depends_on": [
+    "TASK-004",
+    "TASK-002"
+  ],
   "steps": [
     "Create src/api.ts helper functions using fetch (/api/notes: getAll, getById, create, update, deleteNote)",
     "Build NoteList component: display list of notes with title, preview content, updated timestamp",
