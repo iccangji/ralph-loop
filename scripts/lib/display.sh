@@ -86,6 +86,8 @@ show_help() {
   echo ""
   echo -e "${Y}Options:${R}"
   echo "  --max-iterations N, -n N    Set maximum iterations (default: 10)"
+  echo "  --max-retries N             Max consecutive failed iterations before circuit breaker (default: $DEFAULT_MAX_RETRIES, 0 to disable)"
+  echo "  --no-rollback               Keep dirty workspace on failure (debugging)"
   echo "  --agent AGENT, -a AGENT     Select agent: $(supported_agents_list) (default: $DEFAULT_AGENT)"
   echo "  --once                      Run exactly 1 iteration (overrides --max-iterations)"
   echo "  --help, -h                  Show this help message and exit"

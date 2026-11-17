@@ -4,13 +4,15 @@
 # Dependencies: constants.sh, agents.sh
 
 # Parse command line arguments
-# Sets: MAX_ITERATIONS, ONCE_FLAG, RALPH_AGENT, AGENT_EXTRA_ARGS
+# Sets: MAX_ITERATIONS, ONCE_FLAG, RALPH_AGENT, AGENT_EXTRA_ARGS, NO_ROLLBACK, MAX_RETRIES
 # Usage: parse_arguments "$@"
 parse_arguments() {
   MAX_ITERATIONS=10
   ONCE_FLAG=false
   RALPH_AGENT="${DEFAULT_AGENT:-opencode}"
   AGENT_EXTRA_ARGS=()
+  NO_ROLLBACK=false
+  MAX_RETRIES="$DEFAULT_MAX_RETRIES"
 
   while [[ $# -gt 0 ]]; do
     case $1 in
@@ -48,6 +50,22 @@ parse_arguments() {
         ;;
       --max-iterations=*)
         MAX_ITERATIONS="${1#*=}"
+        shift
+        ;;
+      --max-retries)
+        if [ -z "$2" ]; then
+          echo "Error: --max-retries requires a value" >&2
+          exit 1
+        fi
+        MAX_RETRIES="$2"
+        shift 2
+        ;;
+      --max-retries=*)
+        MAX_RETRIES="${1#*=}"
+        shift
+        ;;
+      --no-rollback)
+        NO_ROLLBACK=true
         shift
         ;;
       [0-9]*)

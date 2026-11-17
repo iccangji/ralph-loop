@@ -25,6 +25,7 @@ source "$SCRIPT_DIR/scripts/lib/promise.sh"
 source "$SCRIPT_DIR/scripts/lib/tasks.sh"
 source "$SCRIPT_DIR/scripts/lib/graphify.sh"
 source "$SCRIPT_DIR/scripts/lib/notify.sh"
+source "$SCRIPT_DIR/scripts/lib/checkpoint.sh"
 source "$SCRIPT_DIR/scripts/lib/agents.sh"
 source "$SCRIPT_DIR/scripts/lib/display.sh"
 source "$SCRIPT_DIR/scripts/lib/args.sh"
@@ -34,6 +35,9 @@ START_TIME=$(date +%s)
 ITERATION_TIMES=()
 TOTAL_ITERATION_TIME=0
 PREV_ITERATION_TIME=0
+
+# Circuit breaker: track consecutive iterations without task completion
+CONSECUTIVE_FAILURES=0
 
 # Session ID for unique history file naming (YYYYMMDD-HHMMSS format). This is used to prevent overwrites between runs.
 SESSION_ID=$(date +%Y%m%d-%H%M%S)
@@ -105,6 +109,9 @@ for i in $(seq 1 $MAX_ITERATIONS); do
 AGENT_DIR=$SCRIPT_DIR/.agent
 
 $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
+
+  # Capture git checkpoint before agent runs
+  checkpoint_workspace
 
   # Start spinner
   start_spinner
@@ -337,6 +344,31 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
     echo -e "  ⏱️  Total time: ${Y}$ELAPSED_STR${R}"
     display_session_step_totals
     exit $EXIT_DECIDE
+  fi
+
+  # Rollback / Circuit Breaker logic
+  # Check if any task was completed this iteration
+  if [ -z "$COMPLETED_TASK_IDS" ] && ! has_complete_tag "$TAG_OUTPUT"; then
+    CONSECUTIVE_FAILURES=$((CONSECUTIVE_FAILURES + 1))
+    echo -e "${RD}  ⚠️  Iteration $i completed without completing a task${R} (failures: $CONSECUTIVE_FAILURES/${MAX_RETRIES})"
+
+    if [ "$NO_ROLLBACK" != true ]; then
+      rollback_workspace
+    else
+      log_warn "Rollback disabled (--no-rollback), keeping workspace state"
+    fi
+
+    if [ "$MAX_RETRIES" -gt 0 ] && [ "$CONSECUTIVE_FAILURES" -ge "$MAX_RETRIES" ]; then
+      echo ""
+      echo -e "${RD}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
+      echo -e "  🚨 ${RD}Circuit Breaker Tripped${R}: $MAX_RETRIES consecutive failures without progress"
+      echo -e "  Check ${Y}.agent/history/ITERATION-${SESSION_ID}-${i}.txt${R} for details"
+      echo -e "  Add guidance to ${Y}.agent/STEERING.md${R} if needed"
+      echo -e "${RD}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
+      exit $EXIT_CIRCUIT_BREAKER
+    fi
+  else
+    CONSECUTIVE_FAILURES=0
   fi
 
   # Calculate elapsed time

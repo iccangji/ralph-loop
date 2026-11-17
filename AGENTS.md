@@ -148,6 +148,10 @@ Do not break these without an explicit request.
 10. **Unknown CLI flags must error**, not be ignored.
 11. **Docker is optional.** It is used only for project service stacks and
     teardown. Never make an agent run depend on Docker being installed.
+12. **Each iteration checkpoints workspace git state.** Failed iterations roll
+    back automatically unless `--no-rollback` is set.
+13. **Circuit breaker stops silent failures.** After `MAX_RETRIES` (default 3)
+    consecutive iterations with no task completed, loop exits with `EXIT_CIRCUIT_BREAKER`.
 
 ## Module map
 
@@ -172,17 +176,33 @@ Do not break these without an explicit request.
    `$SCRIPT_DIR/workspace` and `AGENT_DIR` to `$SCRIPT_DIR/.agent`.
 2. Prepare run state: temp dir, pi config copy or opencode session DB, and the
    per-run workspace skill link.
-3. Run the agent CLI directly on the host, capture stdout and stderr to a temp
+3. **Capture git checkpoint** of all repositories under `workspace/`.
+4. Run the agent CLI directly on the host, capture stdout and stderr to a temp
    file.
-4. Consume **only complete lines** (`last_complete_line_offset`) so a partial
+5. Consume **only complete lines** (`last_complete_line_offset`) so a partial
    record never loses text.
-5. Feed parsed text to spinner and preview; keep a cleaned transcript in
+6. Feed parsed text to spinner and preview; keep a cleaned transcript in
    `.agent/history/ITERATION-*.txt`.
-6. On `<promise>TASK-x:DONE</promise>`: mark the task, log it, commit here.
-7. Refresh `workspace/graphify-out/` on the host (skipped if `graphify` absent).
-8. Tear down the project stack (`down_project_stack`) so service containers the
+7. On `<promise>TASK-x:DONE</promise>`: mark the task, log it, commit here.
+8. Refresh `workspace/graphify-out/` on the host (skipped if `graphify` absent).
+9. Tear down the project stack (`down_project_stack`) so service containers the
    agent started do not outlive the iteration.
-9. Stop on `COMPLETE`, `BLOCKED` (exit 2), `DECIDE` (exit 3), or max iterations.
+10. **Rollback / Circuit Breaker**:
+    - If iteration completed a task (`<promise>TASK-xxx:DONE</promise>`): reset failure counter, accept changes.
+    - If iteration completed **no task** (silent failure, no tag):
+      - Increment consecutive failure counter.
+      - Rollback all workspace repos to checkpoint (`git reset --hard` + `git clean -fd`).
+      - If `--no-rollback`: keep workspace dirty for debugging.
+      - If consecutive failures >= `MAX_RETRIES` (default 3): trip circuit breaker, exit with `EXIT_CIRCUIT_BREAKER` (7).
+11. Stop on `COMPLETE`, `BLOCKED` (exit 2), `DECIDE` (exit 3), circuit breaker (exit 7), or max iterations.
+
+## Circuit Breaker Behavior
+
+- **Default**: 3 consecutive failed iterations (no task completed) triggers circuit breaker.
+- **`--max-retries N`**: Set threshold (0 to disable).
+- **`--no-rollback`**: Skip rollback, keep workspace state for inspection.
+- `BLOCKED` / `DECIDE` / `COMPLETE` tags **do not count** as failures — they are explicit signals.
+- Only **silent iterations** (no task completed, no special tag) increment the counter.
 
 ## Verifying changes
 
@@ -233,8 +253,18 @@ full-loop runs need generous timeouts. A short timeout is not a failure signal.
   `workspace/graphify-out/GRAPH_REPORT.md` but cannot query the CLI.
 - Debian's Python is PEP 668 marked, so any Python tooling needs a venv plus
   `python3-venv`; plain `pip install` is rejected.
-- `ralph.sh` is ~370 lines, above the 300-line guidance. Split it only when you
+- `ralph.sh` is ~390 lines, above the 300-line guidance. Split it only when you
   are already changing the loop body.
+- **Rollback is per-iteration, not per-task.** If a task spans multiple repos,
+  all are rolled back together. Partial success in one repo is undone.
+- **Circuit breaker only counts silent failures.** `BLOCKED`, `DECIDE`, and
+  `COMPLETE` tags are explicit signals and reset the counter. Only iterations
+  with no task completed and no tag increment the failure counter.
+- **`--no-rollback` keeps the mess.** Use when debugging why the agent failed
+  (e.g., agent modified files but crashed before committing).
+- **`--max-retries 0` disables circuit breaker.** Useful for long-running
+  tasks that may need many iterations, but risks unbounded API costs on stuck
+  tasks.
 
 # Code Quality Standards
 

@@ -74,5 +74,22 @@ Ralph runs an AI coding agent CLI directly on the host in an autonomous loop to 
 - `--once`: Run a single iteration and stop.
 - `--agent AGENT`, `-a AGENT`: Select `opencode` (default) or `pi`.
 - `--max-iterations N`: Maximum number of iterations before stopping (default: 10).
+- `--max-retries N`: Consecutive failed iterations before circuit breaker trips (default: 3, 0 to disable).
+- `--no-rollback`: Keep dirty workspace on failure for debugging (default: rollback enabled).
 - `--help`: Display usage and options.
 - `-- ARGS...`: Extra arguments forwarded to the agent CLI.
+
+## Safety Features
+
+### Automatic Rollback
+Each iteration checkpoints all git repositories in `workspace/`. If an iteration completes without a valid `<promise>TASK-xxx:DONE</promise>` tag, Ralph automatically restores every repo to its checkpoint:
+- `git reset --hard <checkpoint>` — restores committed files
+- `git clean -fd` — removes untracked files
+
+Use `--no-rollback` to keep the workspace state for debugging.
+
+### Circuit Breaker
+If 3 consecutive iterations complete without any task being completed (no `<promise>TASK-xxx:DONE</promise>`, no `<promise>COMPLETE</promise>`, no `<promise>BLOCKED</promise>`, no `<promise>DECIDE</promise>`), Ralph trips the circuit breaker and exits with code 7. This prevents unbounded retries on stuck tasks.
+
+- `--max-retries N`: Adjust threshold (0 = disabled).
+- Explicit tags (`BLOCKED`, `DECIDE`, `COMPLETE`) do not count as failures.
