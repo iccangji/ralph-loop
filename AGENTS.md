@@ -84,8 +84,13 @@ Comprehensive execution details for a single task:
 ### 3. Task Execution Rules
 
 - The managing agent defines and reviews tasks in these files, ensuring dependencies (`depends_on`) form a valid Directed Acyclic Graph (DAG).
-- The agent CLI selects the highest-priority task where `passes: false` AND all task IDs in `depends_on` have `passes: true`.
-- Once finished, the agent commits changes in `workspace/` and outputs `<promise>TASK-{ID}:DONE</promise>`.
+- **Host deterministically selects the next runnable task** via `scripts/lib/selector.sh`:
+  - Filters tasks with `passes: false`
+  - Requires all `depends_on` to have `passes: true`
+  - Picks lowest `priority` number; stable array order for ties
+  - Validates no circular deps, no missing refs
+- Agent receives the selected task spec injected in prompt (`$CURRENT_TASK_ID`, `$CURRENT_TASK_TITLE`, `$CURRENT_TASK_DESCRIPTION`, `$CURRENT_TASK_STEPS`, `$CURRENT_TASK_ACCEPTANCE`, `$CURRENT_TASK_PRD`)
+- Once finished, the agent commits changes in `workspace/` and outputs `<promise>TASK-{ID}:DONE</promise>`
 - The host flips `passes: true`, updates `LOG.md`, and commits to this repository.
 
 ## Runtime model

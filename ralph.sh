@@ -26,6 +26,7 @@ source "$SCRIPT_DIR/scripts/lib/tasks.sh"
 source "$SCRIPT_DIR/scripts/lib/graphify.sh"
 source "$SCRIPT_DIR/scripts/lib/notify.sh"
 source "$SCRIPT_DIR/scripts/lib/checkpoint.sh"
+source "$SCRIPT_DIR/scripts/lib/selector.sh"
 source "$SCRIPT_DIR/scripts/lib/agents.sh"
 source "$SCRIPT_DIR/scripts/lib/display.sh"
 source "$SCRIPT_DIR/scripts/lib/args.sh"
@@ -86,6 +87,12 @@ prepare_workspace_skills
 export COMPOSE_PROJECT_NAME
 COMPOSE_PROJECT_NAME=$(compose_project_name)
 
+# Early exit if all tasks already passed
+if all_tasks_passed; then
+  log_success "All tasks already complete. Nothing to do."
+  exit $EXIT_COMPLETE
+fi
+
 show_ralph
 echo -e " ${C}Starting Ralph${R} ・ ${Y}v$VERSION${R} ・ Agent: ${Y}$RALPH_AGENT_NAME${R} ・ Max iterations: ${Y}$MAX_ITERATIONS${R}"
 echo ""
@@ -101,12 +108,35 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   echo -e "${B}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
   echo -e ""
 
-  # Run Agent with the ralph prompt. PROJECT_ROOT is the workspace path on the
+  # Select next runnable task (shell-side deterministic selection)
+  TASK_ID=$(select_next_task "$SCRIPT_DIR/.agent/tasks.json" "$SCRIPT_DIR/.agent/tasks")
+  if [ -z "$TASK_ID" ]; then
+    log_success "No runnable tasks remaining."
+    exit $EXIT_COMPLETE
+  fi
+
+  # Load the task spec and inject into prompt
+  TASK_SPEC=$(get_task_spec "$SCRIPT_DIR/.agent/tasks" "$TASK_ID")
+  TASK_TITLE=$(echo "$TASK_SPEC" | jq -r '.title')
+  TASK_DESCRIPTION=$(echo "$TASK_SPEC" | jq -r '.description')
+  TASK_STEPS=$(echo "$TASK_SPEC" | jq -r '.steps[]')
+  TASK_ACCEPTANCE=$(echo "$TASK_SPEC" | jq -r '.acceptance_criteria[]')
+  TASK_PRD=$(echo "$TASK_SPEC" | jq -r '.prd // empty')
+
+  echo -e "${C}  → Selected task: ${Y}$TASK_ID${R} - ${Y}$TASK_TITLE${R}"
+
+  # Run Agent with the ralph prompt + selected task spec. PROJECT_ROOT is the workspace path on the
   # host: the agent runs there directly, so relative paths and git commits land
   # in the service repos. AGENT_DIR points at the control files, which live
   # next to the workspace, not inside it.
   PROMPT_CONTENT="PROJECT_ROOT=$SCRIPT_DIR/workspace
 AGENT_DIR=$SCRIPT_DIR/.agent
+CURRENT_TASK_ID=$TASK_ID
+CURRENT_TASK_TITLE=$TASK_TITLE
+CURRENT_TASK_DESCRIPTION=$TASK_DESCRIPTION
+CURRENT_TASK_PRD=$TASK_PRD
+CURRENT_TASK_STEPS=$(printf '%s\n' "$TASK_STEPS" | sed 's/^/  /')
+CURRENT_TASK_ACCEPTANCE=$(printf '%s\n' "$TASK_ACCEPTANCE" | sed 's/^/  /')
 
 $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
 

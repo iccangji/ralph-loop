@@ -50,21 +50,28 @@ Use the commands this project already defines. Find them in `package.json` scrip
 
 ## Task Flow
 
-Tasks are listed in `$AGENT_DIR/tasks.json`.
+The orchestrator has selected **$CURRENT_TASK_ID: $CURRENT_TASK_TITLE** for this iteration.
 
-1. Pick the highest-priority task where `passes: false` and all prerequisites in `depends_on` (if present) already have `passes: true`.
-2. Read its full spec in `$AGENT_DIR/tasks/TASK-${ID}.json`. If the task defines a `prd` field, read the referenced PRD section for full context.
-3. Implement the steps and add or update tests that prove the task works.
-4. Run the project's checks for the affected files, then the project-wide test suite.
-5. All checks must pass. If you broke an unrelated test, fix it before continuing.
-6. Commit changes to git with the Conventional Commit format.
-7. Write a task report to `$AGENT_DIR/reports/TASK-${ID}.md` documenting what was implemented, files touched, verification steps performed, and any notes for the operator.
-8. Output `<promise>TASK-{ID}:DONE</promise>`. If every task in `$AGENT_DIR/tasks.json` now passes (including the one you just completed), ALSO output `<promise>COMPLETE</promise>`. Output BOTH tags:
+Details:
+- Description: $CURRENT_TASK_DESCRIPTION
+- PRD reference: $CURRENT_TASK_PRD (if set, read this section for full requirements)
+- Implementation steps:
+$CURRENT_TASK_STEPS
+- Acceptance criteria:
+$CURRENT_TASK_ACCEPTANCE
+
+Your workflow:
+1. If `$CURRENT_TASK_PRD` is set, read that PRD section for complete domain context.
+2. Implement the steps and add or update tests that prove the task works.
+3. Run the project's checks for the affected files, then the project-wide test suite.
+4. All checks must pass. If you broke an unrelated test, fix it before continuing.
+5. Commit changes to git with the Conventional Commit format.
+6. Write a task report to `$AGENT_DIR/reports/${CURRENT_TASK_ID}.md` documenting what was implemented, files touched, verification steps performed, and any notes for the operator.
+7. Output `<promise>${CURRENT_TASK_ID}:DONE</promise>`. If every task in `$AGENT_DIR/tasks.json` now passes, ALSO output `<promise>COMPLETE</promise>`:
    ```
-   <promise>TASK-001:DONE</promise>
-   <promise>COMPLETE</promise>
+   <promise>${CURRENT_TASK_ID}:DONE</promise>
    ```
-9. Stop immediately. Do not read or start the next task.
+8. Stop immediately. Do not read or start the next task.
 
 ## Rules
 
