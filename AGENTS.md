@@ -19,7 +19,9 @@ The agent reading this repository (running in Antigravity or another harness) ac
 The project uses a two-tier task structure stored under `$AGENT_DIR`:
 
 ### 1. Task Index: `$AGENT_DIR/tasks.json`
+
 An array of task summary items representing the execution queue:
+
 ```json
 [
   {
@@ -42,15 +44,18 @@ An array of task summary items representing the execution queue:
   }
 ]
 ```
-- `id` *(string, required)*: Identifier matching `TASK-[A-Za-z0-9._-]+`.
-- `title` *(string, required)*: Human-readable task title. Appended to `LOG.md` when completed.
-- `passes` *(boolean, required)*: `false` initially. Updated to `true` exclusively by the host orchestrator (`tasks.sh`) when `<promise>TASK-x:DONE</promise>` is observed.
-- `priority` *(number, optional)*: Priority order (lower integer = higher priority).
-- `depends_on` *(array of strings, optional)*: List of task IDs that must have `passes: true` before this task can be selected. An agent picking tasks must evaluate this dependency chain.
-- `specFilePath` *(string, optional)*: Path to detailed specification file.
+
+- `id` _(string, required)_: Identifier matching `TASK-[A-Za-z0-9._-]+`.
+- `title` _(string, required)_: Human-readable task title. Appended to `LOG.md` when completed.
+- `passes` _(boolean, required)_: `false` initially. Updated to `true` exclusively by the host orchestrator (`tasks.sh`) when `<promise>TASK-x:DONE</promise>` is observed.
+- `priority` _(number, optional)_: Priority order (lower integer = higher priority).
+- `depends_on` _(array of strings, optional)_: List of task IDs that must have `passes: true` before this task can be selected. An agent picking tasks must evaluate this dependency chain.
+- `specFilePath` _(string, optional)_: Path to detailed specification file.
 
 ### 2. Task Specification: `$AGENT_DIR/tasks/TASK-{ID}.json`
+
 Comprehensive execution details for a single task:
+
 ```json
 {
   "id": "TASK-001",
@@ -71,6 +76,7 @@ Comprehensive execution details for a single task:
 ```
 
 ### 3. Task Execution Rules
+
 - The managing agent defines and reviews tasks in these files, ensuring dependencies (`depends_on`) form a valid Directed Acyclic Graph (DAG).
 - The `pi` agent selects the highest-priority task where `passes: false` AND all task IDs in `depends_on` have `passes: true`.
 - Once finished, the container commits changes in `workspace/` and outputs `<promise>TASK-{ID}:DONE</promise>`.
@@ -130,25 +136,25 @@ Do not break these without an explicit request.
    multi-repo layout (one repo per service) is also valid.
 10. **Unknown CLI flags must error**, not be ignored.
 11. **The Docker socket is mounted on purpose.** The agent manages service
-   containers with `docker compose`, which grants host-root equivalent access.
-   Only run Ralph on a host you can throw away.
+    containers with `docker compose`, which grants host-root equivalent access.
+    Only run Ralph on a host you can throw away.
 
 ## Module map
 
-| File | Responsibility |
-|---|---|
-| `ralph.sh` | Arg wiring, preflight order, iteration loop, exit codes |
-| `scripts/lib/args.sh` | Flag parsing (`--once`, `-n`, `--agent`, `--`, `--help`) |
-| `scripts/lib/constants.sh` | Version, image tag, `EXIT_*` codes |
-| `scripts/lib/docker.sh` | Image build, provider check, socket mount, stack teardown, `docker run` builder |
-| `scripts/lib/agents.sh` | Agent registry, container naming, `build_agent_command` |
-| `scripts/lib/preflight.sh` | Workspace git check, required files |
-| `scripts/lib/output.sh` | pi JSONL parsing, summary extraction, complete-line offset |
-| `scripts/lib/promise.sh` | `<promise>` tag detection and extraction |
-| `scripts/lib/tasks.sh` | `mark_task_complete`, `all_tasks_passed` |
-| `scripts/lib/graphify.sh` | Host-side `graphify update` after completion |
-| `scripts/lib/cleanup.sh` | Signal handling, container and temp-file cleanup |
-| `scripts/lib/{spinner,preview,timing,display,notify,terminal,logging}.sh` | UI only |
+| File                                                                      | Responsibility                                                                  |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `ralph.sh`                                                                | Arg wiring, preflight order, iteration loop, exit codes                         |
+| `scripts/lib/args.sh`                                                     | Flag parsing (`--once`, `-n`, `--agent`, `--`, `--help`)                        |
+| `scripts/lib/constants.sh`                                                | Version, image tag, `EXIT_*` codes                                              |
+| `scripts/lib/docker.sh`                                                   | Image build, provider check, socket mount, stack teardown, `docker run` builder |
+| `scripts/lib/agents.sh`                                                   | Agent registry, container naming, `build_agent_command`                         |
+| `scripts/lib/preflight.sh`                                                | Workspace git check, required files                                             |
+| `scripts/lib/output.sh`                                                   | pi JSONL parsing, summary extraction, complete-line offset                      |
+| `scripts/lib/promise.sh`                                                  | `<promise>` tag detection and extraction                                        |
+| `scripts/lib/tasks.sh`                                                    | `mark_task_complete`, `all_tasks_passed`                                        |
+| `scripts/lib/graphify.sh`                                                 | Host-side `graphify update` after completion                                    |
+| `scripts/lib/cleanup.sh`                                                  | Signal handling, container and temp-file cleanup                                |
+| `scripts/lib/{spinner,preview,timing,display,notify,terminal,logging}.sh` | UI only                                                                         |
 
 `scripts/docker-entrypoint.sh` copies `/pi-config` into the writable
 `/home/pi/.pi/agent`, writes `trust.json` for the current workspace path, then
@@ -206,8 +212,7 @@ full-loop runs need generous timeouts. A short timeout is not a failure signal.
 - pi only reads project MCP config after project trust, hence `trust.json`.
 - Skills are discovered from `.agents/skills` (canonical). `.agent/skills` and
   `.claude/skills` are relative symlinks.
-- `.pi/models.json` is gitignored and must point at
-  `http://host.docker.internal:<port>/v1`; the host copy uses `localhost`.
+- `.pi/models.json` is gitignored.
 - `graphify` runs on the host only. The agent may read
   `workspace/graphify-out/GRAPH_REPORT.md` but cannot query the CLI.
 - Debian's Python is PEP 668 marked, so any Python tooling needs a venv plus

@@ -42,15 +42,18 @@ Ralph runs an AI coding agent inside an ephemeral Docker container in an autonom
 
 ## Quickstart
 
-1. Configure models and provider in `.pi/models.json` (pointing to `http://host.docker.internal:<port>/v1`).
+1. Configure models and provider in `.pi/models.json`.
 2. Initialize target project in `workspace/`. A single repo or one repo per service both work:
+
    ```bash
    cd workspace && git init          # single repo
    # or: git init each service directory
    ```
+
 3. Optional: put a `docker-compose.yml` at the workspace root. The agent starts it, reads service logs, and `exec`s into containers. Relative bind mounts work because the workspace keeps its host path inside the container.
 4. Define tasks in `.agent/tasks.json` and `.agent/tasks/TASK-{ID}.json`.
 5. Run Ralph:
+
    ```bash
    ./ralph.sh --once
    ```
