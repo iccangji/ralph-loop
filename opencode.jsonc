@@ -6,6 +6,7 @@
     { "action": "shell", "resource": "*", "effect": "allow" },
     { "action": "edit", "resource": "*", "effect": "allow" },
     { "action": "external_directory", "resource": "*", "effect": "deny" },
+    { "action": "external_directory", "resource": "*/.agent/reports/*", "effect": "allow" },
     { "action": "shell", "resource": "git push*", "effect": "deny" },
     { "action": "shell", "resource": "rm -rf *", "effect": "deny" },
     { "action": "shell", "resource": "sudo rm -rf *", "effect": "deny" },

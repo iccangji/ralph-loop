@@ -9,7 +9,7 @@ You are implementing the project described in `$AGENT_DIR/prd/SUMMARY.md`.
 You run directly on the operator's host as their user, with the target workspace at `$PROJECT_ROOT`.
 
 - `$PROJECT_ROOT` may hold one project or several git repos (one per service). Commit in the repo that owns the files you changed.
-- Treat everything outside `$PROJECT_ROOT` and `/tmp` as read-only. Never modify `$AGENT_DIR/` (control files): the host orchestrator owns `tasks.json` and `LOG.md`.
+- Treat everything outside `$PROJECT_ROOT` and `/tmp` as read-only, except `$AGENT_DIR/reports/` which is reserved for your completion reports. Never modify other files in `$AGENT_DIR/` (control files): the host orchestrator owns `tasks.json` and `LOG.md`.
 - The network is available. Provider credentials come from the operator's agent config.
 - You may use a browser and `sudo` when the task genuinely needs them, but do not install global tooling just to satisfy the prompt.
 - Docker is optional. If the project has a compose file and `docker` works, use it; otherwise run the project's services natively.
@@ -58,12 +58,13 @@ Tasks are listed in `$AGENT_DIR/tasks.json`.
 4. Run the project's checks for the affected files, then the project-wide test suite.
 5. All checks must pass. If you broke an unrelated test, fix it before continuing.
 6. Commit changes to git with the Conventional Commit format.
-7. Output `<promise>TASK-{ID}:DONE</promise>`. If every task in `$AGENT_DIR/tasks.json` now passes (including the one you just completed), ALSO output `<promise>COMPLETE</promise>`. Output BOTH tags:
+7. Write a task report to `$AGENT_DIR/reports/TASK-${ID}.md` documenting what was implemented, files touched, verification steps performed, and any notes for the operator.
+8. Output `<promise>TASK-{ID}:DONE</promise>`. If every task in `$AGENT_DIR/tasks.json` now passes (including the one you just completed), ALSO output `<promise>COMPLETE</promise>`. Output BOTH tags:
    ```
    <promise>TASK-001:DONE</promise>
    <promise>COMPLETE</promise>
    ```
-8. Stop immediately. Do not read or start the next task.
+9. Stop immediately. Do not read or start the next task.
 
 ## Rules
 
