@@ -2,6 +2,7 @@
   "id": "TASK-004",
   "title": "Scaffold React Vite webapp",
   "category": "setup",
+  "prd": ".agent/prd/PRD-001.md",
   "description": "Initialize Vite React TypeScript project in workspace/simple-notes-webapp.",
   "depends_on": [],
   "steps": [

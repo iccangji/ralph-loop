@@ -30,7 +30,6 @@ An array of task summary items representing the execution queue:
     "title": "Short title describing the task",
     "category": "setup | feature | refactor | test",
     "specFilePath": ".agent/tasks/TASK-001.json",
-    "prd": ".agent/prd/PRD.md#section-anchor",
     "priority": 1,
     "depends_on": [],
     "status": "pending"
@@ -53,7 +52,6 @@ An array of task summary items representing the execution queue:
 - `priority` _(number, optional)_: Priority order (lower integer = higher priority).
 - `depends_on` _(array of strings, optional)_: List of task IDs that must have `status: "completed"` before this task can be selected. An agent picking tasks must evaluate this dependency chain.
 - `specFilePath` _(string, optional)_: Path to detailed specification file.
-- `prd` _(string, optional)_: Path to PRD doc or section anchor relevant to this task (e.g. `.agent/prd/PRD.md#user-auth`).
 
 ### 2. Task Specification: `$AGENT_DIR/tasks/TASK-{ID}.json`
 
@@ -64,7 +62,7 @@ Comprehensive execution details for a single task:
   "id": "TASK-001",
   "title": "Short title describing the task",
   "category": "setup | feature | refactor | test",
-  "prd": ".agent/prd/PRD.md#section-anchor",
+  "prd": ".agent/prd/PRD-001.md",
   "description": "Full description of what needs to be implemented and why.",
   "depends_on": [],
   "steps": [
@@ -79,9 +77,35 @@ Comprehensive execution details for a single task:
 }
 ```
 
-- `prd` _(string, optional)_: Context link to the relevant PRD requirement or design spec for this task.
+- `prd` _(string, optional)_: Relative file path to the source PRD document (e.g. `.agent/prd/PRD-001.md`). Multiple PRDs can coexist across different grilling and planning sessions.
 
-### 3. Task Execution Rules
+### 3. PRD Structure
+
+Multiple PRD documents can coexist in `$AGENT_DIR/prd/`:
+
+```
+.agent/prd/
+├── PRD-001.md
+├── PRD-002.md
+└── SUMMARY.md
+```
+
+Each PRD file begins with YAML frontmatter containing `id`, `title`, and `created_at`:
+
+```markdown
+---
+id: "PRD-001"
+title: "Simple Notes App (API + Webapp)"
+created_at: "2026-11-17T14:30:00Z"
+---
+
+# Simple Notes App (API + Webapp)
+...
+```
+
+Tasks reference the PRD file path directly in their `TASK-{ID}.json` spec via `"prd": ".agent/prd/PRD-001.md"`.
+
+### 4. Task Execution Rules
 
 - The managing agent defines and reviews tasks in these files, ensuring dependencies (`depends_on`) form a valid Directed Acyclic Graph (DAG).
 - **Host deterministically selects the next runnable task** via `scripts/lib/selector.sh`:

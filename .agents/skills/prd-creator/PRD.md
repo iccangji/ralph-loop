@@ -1,6 +1,6 @@
 # PRD Creation Through Structured Questioning
 
-Help beginner-level developers transform software ideas into comprehensive PRD.md files through structured questioning delegated to the **grilling** skill.
+Help beginner-level developers transform software ideas into comprehensive PRD-{ID}.md files with frontmatter through structured questioning delegated to the **grilling** skill.
 
 ## Conversation Flow
 
@@ -9,8 +9,8 @@ Help beginner-level developers transform software ideas into comprehensive PRD.m
 3. Verify project prerequisites (access, MCPs, docs, env vars, test users)
 4. Create executive summary for user validation
 5. Research competitive landscape (if applicable)
-6. Generate comprehensive PRD.md
-6. Iterate based on feedback
+6. Generate comprehensive PRD-{ID}.md with frontmatter (id, title, created_at)
+7. Iterate based on feedback
 
 **CRITICAL**: Use the **grilling** skill for all structured questioning. It handles the interview tree, rounds, recommended answers, and shared understanding mapping. Do NOT inline questioning prose or AskUserQuestion patterns here.
 
@@ -31,6 +31,27 @@ Gather information on these aspects through **grilling**:
 11. Execution prerequisites: database access, service access, MCPs, documentation, environment variables, and login/test users
 12. Dependencies
 
+## PRD File Format
+
+Multiple PRD documents can coexist in `.agent/prd/` as separate files:
+- `.agent/prd/PRD-001.md`
+- `.agent/prd/PRD-002.md`
+- etc.
+
+Each PRD file MUST begin with YAML frontmatter:
+
+```yaml
+---
+id: "PRD-001"
+title: "Simple Notes App (API + Webapp)"
+created_at: "2026-11-17T14:30:00Z"
+---
+```
+
+- `id`: Matches the filename suffix (e.g., "PRD-001")
+- `title`: Human-readable project name
+- `created_at`: ISO 8601 timestamp of creation
+
 ## PRD Creation Workflow
 
 **CRITICAL**: Don't create the PRD until you have all necessary information, including needed libraries, frameworks, 3rd party integrations, etc. Use **grilling** skill for all clarification.
@@ -44,7 +65,7 @@ PRD Progress:
 - [ ] Create executive summary for user validation
 - [ ] Get user confirmation to proceed
 - [ ] Research competitive landscape (if not done)
-- [ ] Generate comprehensive PRD
+- [ ] Generate comprehensive PRD-{ID}.md with frontmatter
 - [ ] Present and gather feedback
 - [ ] Iterate based on feedback
 ```
@@ -125,7 +146,7 @@ The `Prerequisites and Access` section must include:
 - Login/test user requirements without passwords or secret values
 - Open prerequisite gaps and the user's proceed/block decision for each gap
 
-Save as: `PROJECT_ROOT/.agent/prd/PRD.md`
+**Save as**: `PROJECT_ROOT/.agent/prd/PRD-{ID}.md` (e.g., `PRD-001.md`) with frontmatter as specified above.
 
 ### Step 5: Iterate
 
@@ -188,7 +209,7 @@ When users provide wireframes or mockups:
 ## After PRD Completion
 
 Once the PRD is complete and approved, inform the user:
-"Your PRD is complete and saved. Would you like me to proceed to the next step and generate implementation tasks for developers? See [JSON.md](JSON.md)."
+"Your PRD is complete and saved as `PRD-{ID}.md`. Would you like me to proceed to the next step and generate implementation tasks for developers? See [JSON.md](JSON.md)."
 
 **CRITICAL**: Make the plan extremely concise. Sacrifice grammar for the sake of concision.
 
@@ -206,4 +227,4 @@ Before saving the PRD:
 - [ ] User stories are small and specific
 - [ ] Functional requirements are numbered and unambiguous
 - [ ] Non-goals section defines clear boundaries
-- [ ] Saved to `PROJECT_ROOT/.agent/prd/PRD.md`
+- [ ] Saved to `PROJECT_ROOT/.agent/prd/PRD-{ID}.md` with frontmatter (id, title, created_at)

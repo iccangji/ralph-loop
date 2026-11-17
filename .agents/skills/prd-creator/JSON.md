@@ -11,7 +11,7 @@ Only proceed after user confirmation.
 
 ## Task Generation Workflow
 
-You should read the PRD markdown file located in `PROJECT_ROOT/.agent/prd/PRD.md`.
+You should read the PRD markdown file located in `PROJECT_ROOT/.agent/prd/PRD-{ID}.md`.
 Each task in the PRD will have a unique ID, formatted as `TASK-${ID}`.
 Use those IDs to generate the task list. If the PRD has a `Prerequisites and Access` section, `TASK-1` is reserved for prerequisite verification. If no prerequisites section exists, skip `TASK-1` and start with feature tasks.
 
@@ -19,10 +19,10 @@ Copy and track progress:
 
 ```
 Task Generation Progress:
-- [ ] Analyze the complete PRD
+- [ ] Analyze the complete PRD-{ID}.md
 - [ ] Generate prerequisite verification task (optional, only if PRD has prerequisites)
-- [ ] Generate task index in `PROJECT_ROOT/.agent/tasks.json`
-- [ ] Generate detailed spec for each task in `PROJECT_ROOT/.agent/tasks/TASK-${ID}.json`
+- [ ] Generate task index in `PROJECT_ROOT/.agent/tasks.json` (minimal, no prd field)
+- [ ] Generate detailed spec for each task in `PROJECT_ROOT/.agent/tasks/TASK-${ID}.json` (with prd field pointing to .agent/prd/PRD-{ID}.md)
 - [ ] Present complete task list to user for review
 ```
 
@@ -52,6 +52,7 @@ Use this shape for the prerequisite task:
   "id": "TASK-1",
   "title": "Verify project prerequisites and access",
   "category": "setup",
+  "prd": ".agent/prd/PRD-001.md",
   "description": "Verify that required database access, MCPs, service documentation, environment variables, and login/test users are available before implementation begins.",
   "acceptanceCriteria": [
     "`PROJECT_ROOT/.env.local` exists with placeholder entries for every required environment variable name listed in the PRD",
@@ -66,7 +67,7 @@ Use this shape for the prerequisite task:
     {
       "step": 1,
       "description": "Read prerequisite requirements from the PRD",
-      "details": "Open `PROJECT_ROOT/.agent/prd/PRD.md` and review the `Prerequisites and Access` section. List required database access, MCPs, service docs, environment variable names, login/test users, and any open gaps.",
+      "details": "Open `PROJECT_ROOT/.agent/prd/PRD-{ID}.md` and review the `Prerequisites and Access` section. List required database access, MCPs, service docs, environment variable names, login/test users, and any open gaps.",
       "status": "pending"
     },
     {
@@ -111,7 +112,7 @@ Use this shape for the prerequisite task:
 
 ## Root task list format
 
-Each task in the index must follow this structure:
+Each task in the index must follow this structure (notice: **no `prd` field in `tasks.json`**):
 
 ```json:PROJECT_ROOT/.agent/tasks.json
 [
@@ -120,7 +121,6 @@ Each task in the index must follow this structure:
     "title": "Clear, concise title of the task",
     "category": "setup | feature | refactor | test",
     "specFilePath": ".agent/tasks/TASK-1.json",
-    "prd": ".agent/prd/PRD.md#section-anchor",
     "priority": 1,
     "depends_on": [],
     "status": "pending"
@@ -130,7 +130,6 @@ Each task in the index must follow this structure:
     "title": "Feature implementation building on prerequisites",
     "category": "feature",
     "specFilePath": ".agent/tasks/TASK-2.json",
-    "prd": ".agent/prd/PRD.md#section-anchor",
     "priority": 2,
     "depends_on": ["TASK-1"],
     "status": "pending"
@@ -144,21 +143,20 @@ Each task in the index must follow this structure:
 - `title`: A title that gives a high-level overview of the task
 - `category`: Classification of task type (setup, feature, refactor, test, ui-ux, data-model, api-endpoint, security, etc.)
 - `specFilePath`: Path to the individual task specification file, formatted as `.agent/tasks/TASK-${ID}.json`
-- `prd`: Optional link or section anchor in the PRD (e.g., `.agent/prd/PRD.md#auth`)
 - `priority`: Priority number (lower integer = higher priority, used by deterministic selector)
 - `depends_on`: Explicit array of prerequisite task IDs that must have `status: "completed"` before this task is runnable. MUST be present on all tasks (use `[]` if no dependencies).
 - `status`: Always initialize to `"pending"`. The host orchestrator manages transitions to `"completed"`. (Do NOT set `"in_progress"` during generation — it is a runtime-only state managed by the loop).
 
 ## Individual JSON Task Format
 
-Each task specification file provides comprehensive details for implementation. The root `tasks.json` is the index; `TASK-${ID}.json` contains the execution spec.
+Each task specification file provides comprehensive details for implementation. The root `tasks.json` is the index; `TASK-${ID}.json` contains the execution spec, including the `prd` field linking to the owning PRD document.
 
 ```json:PROJECT_ROOT/.agent/tasks/TASK-${ID}.json
 {
   "id": "TASK-${ID}",
   "title": "Clear, concise title of the task",
   "category": "category-name",
-  "prd": ".agent/prd/PRD.md#section-anchor",
+  "prd": ".agent/prd/PRD-001.md",
   "description": "In-depth specification including expected behavior, user flow, and output",
   "acceptanceCriteria": [
     "List of specific, verifiable conditions that must be true when task is complete"
@@ -195,7 +193,7 @@ Each task specification file provides comprehensive details for implementation. 
 
 | Field                 | Type             | Description                                                                      |
 | --------------------- | ---------------- | -------------------------------------------------------------------------------- |
-| `prd`                 | string           | Section anchor or path in the PRD (e.g. `.agent/prd/PRD.md#db`)                  |
+| `prd`                 | string           | File path to the source PRD document (e.g. `.agent/prd/PRD-001.md`)               |
 | `estimatedComplexity` | string           | One of: `"low"`, `"medium"`, `"high"`, `"very high"` - helps with planning       |
 | `technicalNotes`      | array of strings | Implementation hints, gotchas, or technical constraints developers should know   |
 

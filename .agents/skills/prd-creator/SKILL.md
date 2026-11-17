@@ -1,10 +1,10 @@
 ---
 name: prd-creator
-description: Guides creation of comprehensive Product Requirement Documents (PRDs) for software projects through structured questioning (delegated to the grilling skill) and validation, then generates implementation task lists in JSON format with status enum, explicit depends_on, and optional TASK-1. Use when users want to document a software idea, create specifications for development, plan a new application feature/bug, or break down requirements into actionable tasks. Transforms ideas into implementation-ready documents with verifiable pass criteria.
+description: Guides creation of comprehensive Product Requirement Documents (PRDs) for software projects through structured questioning (delegated to the grilling skill) and validation, then generates implementation task lists in JSON format with status enum, explicit depends_on, optional TASK-1, and prd field linking to PRD-{ID}.md. Use when users want to document a software idea, create specifications for development, plan a new application feature/bug, or break down requirements into actionable tasks. Transforms ideas into implementation-ready documents with verifiable pass criteria.
 license: MIT
 metadata:
   author: pageai
-  version: '1.1.0'
+  version: '1.2.0'
   tags: prd, product requirements, software development, documentation, task generation
   website: https://pageai.pro/blog/long-running-ai-coding-agents-ralph-loop#step-2-write-your-requirements
 ---
@@ -41,7 +41,8 @@ You will use the **grilling skill** to interview the user relentlessly about eve
 - Verifies project prerequisites before PRD finalization
 - Creates executive summary for validation
 - Researches competitive landscape
-- Generates comprehensive PRD.md with:
+- Generates comprehensive PRD-{ID}.md with:
+  - YAML frontmatter: `id` (e.g., "PRD-001"), `title`, `created_at` (ISO 8601)
   - App overview and objectives
   - Target audience
   - Success metrics and KPIs
@@ -57,7 +58,7 @@ You will use the **grilling skill** to interview the user relentlessly about eve
 2. Verify prerequisites and create/update `.env.local` placeholders
 3. Create executive summary for user approval
 4. Research competition via WebSearch
-5. Generate complete PRD
+5. Generate complete PRD-{ID}.md with frontmatter
 6. Iterate based on feedback
 
 **Read [PRD.md](PRD.md) for complete instructions.**
@@ -73,13 +74,14 @@ You will need to analyze the completed PRD and generate a comprehensive task lis
 **When to use**: After PRD is complete and approved, or user requests task breakdown
 
 **What it does**:
-- Analyzes the completed PRD
+- Analyzes the completed PRD-{ID}.md
 - Generates `TASK-1` as prerequisite verification (optional - skip if PRD has no prerequisites section)
 - Generates a complete list of implementation tasks in JSON format, covering all features and requirements from the PRD
 - Keeps the tasks small and manageable
 - Categorizes tasks by type (functional, ui-ux, api-endpoint, security, etc.)
 - Defines verification steps using `status` enum (pending/completed) at both task and step level
 - Creates developer-ready checklist with explicit `depends_on` arrays for deterministic ordering
+- Adds `prd` field to each `TASK-{ID}.json` spec pointing to `.agent/prd/PRD-{ID}.md`
 
 **IMPORTANT**:
 - Each task should be simple enough to be completed in maximum 10 minutes.
@@ -89,6 +91,8 @@ You will need to analyze the completed PRD and generate a comprehensive task lis
 - Generate explicit `depends_on` arrays for ALL tasks (fully deterministic)
 - Do NOT mention `in_progress` status (runtime-only, managed by ralph.sh)
 - TASK-1 is optional - skip if PRD has no prerequisites section
+- `tasks.json` index does NOT include `prd` field (keep minimal)
+- Individual `TASK-{ID}.json` MUST include `"prd": ".agent/prd/PRD-{ID}.md"`
 
 **Read [JSON.md](JSON.md) for complete instructions.**
 
@@ -113,9 +117,9 @@ The description should be short, concise and contain:
 
 **If user wants implementation tasks for an existing PRD:**
 1. Read [JSON.md](JSON.md)
-2. Read the PRD file
-3. Generate comprehensive task list in JSON format with `status`, explicit `depends_on`, optional `TASK-1`
-4. Save as `tasks.json`
+2. Read the PRD-{ID}.md file
+3. Generate comprehensive task list in JSON format with `status`, explicit `depends_on`, optional `TASK-1`, and `prd` field in task specs
+4. Save as `tasks.json` and `TASK-{ID}.json` files
 
 **If user wants both:**
 1. Complete PRD creation first [PRD.md](PRD.md), including prerequisite verification and `.env.local` placeholders
@@ -125,9 +129,8 @@ The description should be short, concise and contain:
 
 **If a user want to update the PRD:**
 1. Read [PRD.md](PRD.md)
-2. Update the PRD
-3. Save as `PRD.md`
-4. If needed, update the overall description [SUMMARY.md](SUMMARY.md)
+2. Update the PRD-{ID}.md
+3. If needed, update the overall description [SUMMARY.md](SUMMARY.md)
 5. Ask user if they want to generate implementation tasks
 
 **If a user want to update the implementation tasks:**
@@ -140,14 +143,15 @@ The description should be short, concise and contain:
 1. Update the PRD first [PRD.md](PRD.md)
 2. If needed, update the overall description [SUMMARY.md](SUMMARY.md)
 3. Update the implementation tasks [JSON.md](JSON.md)
-4. Save as `PRD.md` and `tasks.json`
+4. Save as `PRD-{ID}.md` and `tasks.json`
 
 ## After completion
 
 Ensure the required files are present:
-- PROJECT_ROOT/.agent/prd/PRD.md
+- PROJECT_ROOT/.agent/prd/PRD-{ID}.md (with frontmatter id, title, created_at)
 - PROJECT_ROOT/.agent/prd/SUMMARY.md
 - PROJECT_ROOT/.agent/tasks.json
+- PROJECT_ROOT/.agent/tasks/TASK-{ID}.json (each with `"prd": ".agent/prd/PRD-{ID}.md"`)
 
 If they are not present, warn the user and ask if they would like to create any of them.
 
@@ -156,7 +160,7 @@ If they are not present, warn the user and ask if they would like to create any 
 - Do not generate code - focus on documentation and task specification
 - Use the **grilling** skill for structured questioning (not AskUserQuestion directly)
 - Never write real secret values to PRD, tasks, chat, logs, or `.env.local`; use placeholder values and tell the user to fill real values manually
-- In Part 2, generate comprehensive task lists (50-200+ tasks for typical projects)
-- In Part 2, generate `TASK-1` as prerequisite verification ONLY if PRD has prerequisites section
+- Generate comprehensive task lists (50-200+ tasks for typical projects)
+- Generate `TASK-1` as prerequisite verification ONLY if PRD has prerequisites section
 - Always initialize tasks with `"status": "pending"` - never mark tasks complete during generation
 - Use available tools: WebSearch, Sequential Thinking, Read, and the **grilling** skill

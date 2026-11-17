@@ -2,6 +2,7 @@
   "id": "TASK-003",
   "title": "Write API tests with Vitest + supertest",
   "category": "test",
+  "prd": ".agent/prd/PRD-001.md",
   "description": "Write comprehensive Vitest + supertest tests for all CRUD endpoints.",
   "depends_on": [
     "TASK-002"

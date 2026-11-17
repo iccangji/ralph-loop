@@ -2,6 +2,7 @@
   "id": "TASK-006",
   "title": "Configure Docker Compose for dev with API proxy",
   "category": "feature",
+  "prd": ".agent/prd/PRD-001.md",
   "description": "Set up docker-compose.yml and verify full stack: Express API running, React webapp dev server proxying /api to API service.",
   "depends_on": [
     "TASK-005"

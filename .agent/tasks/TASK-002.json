@@ -2,6 +2,7 @@
   "id": "TASK-002",
   "title": "Implement CRUD endpoints with Zod validation",
   "category": "feature",
+  "prd": ".agent/prd/PRD-001.md",
   "description": "Implement all 5 CRUD endpoints for /api/notes with Zod validation schemas in Express API.",
   "depends_on": [
     "TASK-001"

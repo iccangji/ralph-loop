@@ -2,6 +2,7 @@
   "id": "TASK-005",
   "title": "Build UI CRUD and wire to API",
   "category": "feature",
+  "prd": ".agent/prd/PRD-001.md",
   "description": "Implement complete single-page React UI with note list, view detail, create form, edit inline/modal, delete confirmation, connected to Express API.",
   "depends_on": [
     "TASK-004",
