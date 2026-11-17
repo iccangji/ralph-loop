@@ -105,6 +105,19 @@ bash -n ralph.sh && for f in scripts/lib/*.sh; do bash -n "$f"; done
 ```
 Test selector/tasks logic against temporary fixtures in `/tmp`.
 
+## Getting Started / Reuse Across Projects
+
+When cloning this repository or starting a new project:
+
+1. **Initialize the task queue**:
+   ```bash
+   cp .agent/tasks.json.example .agent/tasks.json
+   ```
+2. **Generate PRD & Tasks**:
+   Use the `prd-creator` skill (via grilling) to produce `.agent/prd/PRD-001.md` and populate `.agent/tasks.json` and `.agent/tasks/TASK-*.json`.
+3. **Execute**:
+   Run `./ralph.sh` when ready. Per-session artifacts (`.agent/prd/`, `.agent/tasks/`, `.agent/reports/`, `.agent/history/`, `.agent/tasks.json`) remain local and gitignored.
+
 ## Standards Summary
 
 - **Simplicity First**: Minimum code that solves the problem. No speculative abstractions.

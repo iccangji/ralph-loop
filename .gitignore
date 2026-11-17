@@ -1,20 +1,13 @@
-# Generated pi container config (contains provider credentials)
-.agent/pi/
-.pi/models.json
-.pi/settings.json
+# Ralph per-session generated directories
+.agent/prd/
+.agent/reports/
+.agent/screenshots/
+.agent/tasks/
+.agent/history/
+.agent/logs/LOG.md
 
-node_modules
-.DS_Store
-dist
-dist-ssr
-*.local
-.env
-.nitro
-.tanstack
-.wrangler
-.output
-.vinxi
-__unconfig*
-todos.json
+# Persistent queue (local only - like .env)
+.agent/tasks.json
 
-/workspace
+# Ralph temp state
+.opencode/
