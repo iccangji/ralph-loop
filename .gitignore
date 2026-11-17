@@ -9,5 +9,9 @@
 # Persistent queue (local only - like .env)
 .agent/tasks.json
 
+# Workspace & agent-specific untracked dirs
+workspace/
+.pi/
+
 # Ralph temp state
 .opencode/
