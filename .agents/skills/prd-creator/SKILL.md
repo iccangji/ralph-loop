@@ -1,10 +1,10 @@
 ---
 name: prd-creator
-description: Guides creation of comprehensive Product Requirement Documents (PRDs) for software projects through structured questioning and validation, then generates implementation task lists in JSON format. Use when users want to document a software idea, create specifications for development, plan a new application feature/bug, or break down requirements into actionable tasks. Transforms ideas into implementation-ready documents with verifiable pass criteria.
+description: Guides creation of comprehensive Product Requirement Documents (PRDs) for software projects through structured questioning (delegated to the grilling skill) and validation, then generates implementation task lists in JSON format with status enum, explicit depends_on, and optional TASK-1. Use when users want to document a software idea, create specifications for development, plan a new application feature/bug, or break down requirements into actionable tasks. Transforms ideas into implementation-ready documents with verifiable pass criteria.
 license: MIT
 metadata:
   author: pageai
-  version: '1.0.1'
+  version: '1.1.0'
   tags: prd, product requirements, software development, documentation, task generation
   website: https://pageai.pro/blog/long-running-ai-coding-agents-ralph-loop#step-2-write-your-requirements
 ---
@@ -18,7 +18,7 @@ Transform software ideas into comprehensive PRDs and actionable implementation t
 This skill helps beginner-level developers.
 
 1. Receive an implementation description from the user
-2. Create detailed PRD documents through structured questioning
+2. Create detailed PRD documents through structured questioning (using the **grilling** skill)
 3. Verify implementation prerequisites, including access, MCPs, docs, env variables, and test users
 4. Generate implementation task lists in JSON format for developers
 5. Write an overall description of the project. An executive summary that gives a high level overview of the app and its main features.
@@ -32,14 +32,13 @@ The main goal is to comprehend the intent and think about the larger architectur
 
 **File**: [PRD.md](PRD.md)
 
-You will need to ask clarifying questions to get a clear understanding of the implementation.
+You will use the **grilling skill** to interview the user relentlessly about every aspect of the plan until reaching a shared understanding.
 
 **When to use**: User wants to document a software idea or create feature specifications
 
 **What it does**:
-- Guides structured questioning to gather all requirements
+- Delegates structured questioning to the **grilling** skill (interview until shared understanding)
 - Verifies project prerequisites before PRD finalization
-- Creates/updates `.env.local` with placeholder values only
 - Creates executive summary for validation
 - Researches competitive landscape
 - Generates comprehensive PRD.md with:
@@ -54,7 +53,7 @@ You will need to ask clarifying questions to get a clear understanding of the im
   - Assumptions and dependencies
 
 **Process**:
-1. Ask clarifying questions using `AskUserQuestion` tool
+1. Invoke **grilling** skill for requirements elicitation
 2. Verify prerequisites and create/update `.env.local` placeholders
 3. Create executive summary for user approval
 4. Research competition via WebSearch
@@ -75,16 +74,21 @@ You will need to analyze the completed PRD and generate a comprehensive task lis
 
 **What it does**:
 - Analyzes the completed PRD
-- Generates `TASK-1` as mandatory prerequisite verification
+- Generates `TASK-1` as prerequisite verification (optional - skip if PRD has no prerequisites section)
 - Generates a complete list of implementation tasks in JSON format, covering all features and requirements from the PRD
 - Keeps the tasks small and manageable
 - Categorizes tasks by type (functional, ui-ux, api-endpoint, security, etc.)
-- Defines verification ('pass') steps for each task
-- Creates developer-ready checklist
+- Defines verification steps using `status` enum (pending/completed) at both task and step level
+- Creates developer-ready checklist with explicit `depends_on` arrays for deterministic ordering
 
 **IMPORTANT**:
 - Each task should be simple enough to be completed in maximum 10 minutes.
 - If a task is too complex, it should be split into smaller tasks.
+- Tasks use `status: "pending"` initially (not `passes: false`)
+- Steps use `status: "pending"` initially (not `pass: false`)
+- Generate explicit `depends_on` arrays for ALL tasks (fully deterministic)
+- Do NOT mention `in_progress` status (runtime-only, managed by ralph.sh)
+- TASK-1 is optional - skip if PRD has no prerequisites section
 
 **Read [JSON.md](JSON.md) for complete instructions.**
 
@@ -102,7 +106,7 @@ The description should be short, concise and contain:
 
 **If user wants to create a PRD:**
 1. Read [PRD.md](PRD.md)
-2. Follow the PRD creation workflow
+2. Follow the PRD creation workflow using **grilling** skill for questioning
 3. Verify prerequisites and create/update `.env.local` with placeholder values only
 4. If needed, update the overall description [SUMMARY.md](SUMMARY.md)
 5. After PRD completion, ask: "Would you like me to generate implementation tasks? See Part 2."
@@ -110,7 +114,7 @@ The description should be short, concise and contain:
 **If user wants implementation tasks for an existing PRD:**
 1. Read [JSON.md](JSON.md)
 2. Read the PRD file
-3. Generate comprehensive task list in JSON format, starting with `TASK-1` prerequisite verification
+3. Generate comprehensive task list in JSON format with `status`, explicit `depends_on`, optional `TASK-1`
 4. Save as `tasks.json`
 
 **If user wants both:**
@@ -150,9 +154,9 @@ If they are not present, warn the user and ask if they would like to create any 
 ## Important Constraints
 
 - Do not generate code - focus on documentation and task specification
-- Use AskUserQuestion extensively in Part 1 to clarify requirements
+- Use the **grilling** skill for structured questioning (not AskUserQuestion directly)
 - Never write real secret values to PRD, tasks, chat, logs, or `.env.local`; use placeholder values and tell the user to fill real values manually
 - In Part 2, generate comprehensive task lists (50-200+ tasks for typical projects)
-- In Part 2, always generate `TASK-1` as prerequisite verification before feature work
-- Always initialize tasks with `"passes": false` - never mark tasks complete during generation
-- Use available tools: AskUserQuestion, WebSearch, Sequential Thinking, Read
+- In Part 2, generate `TASK-1` as prerequisite verification ONLY if PRD has prerequisites section
+- Always initialize tasks with `"status": "pending"` - never mark tasks complete during generation
+- Use available tools: WebSearch, Sequential Thinking, Read, and the **grilling** skill

@@ -1,21 +1,22 @@
 # PRD Creation Through Structured Questioning
 
-Help beginner-level developers transform software ideas into comprehensive PRD.md files through structured questioning.
+Help beginner-level developers transform software ideas into comprehensive PRD.md files through structured questioning delegated to the **grilling** skill.
 
 ## Conversation Flow
 
-1. Introduce yourself briefly and explain you'll ask clarifying questions before creating a PRD
-2. Ask questions one at a time conversationally
-3. Focus 70% on understanding the concept, 30% on educating about options
-4. Keep tone friendly and supportive, use plain language
-5. Track assumptions throughout - they'll go in the PRD
+1. Introduce yourself briefly and explain you'll use the **grilling** skill for requirements elicitation
+2. Invoke **grilling** skill to interview the user relentlessly until reaching a shared understanding
+3. Verify project prerequisites (access, MCPs, docs, env vars, test users)
+4. Create executive summary for user validation
+5. Research competitive landscape (if applicable)
+6. Generate comprehensive PRD.md
+6. Iterate based on feedback
 
-**CRITICAL**: Interview the user relentlessly about every aspect of this plan until we reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one. For each question, provide the user's recommended answer. Ask the questions one at a time.
-If a question can be answered by exploring the codebase, explore the codebase instead.
+**CRITICAL**: Use the **grilling** skill for all structured questioning. It handles the interview tree, rounds, recommended answers, and shared understanding mapping. Do NOT inline questioning prose or AskUserQuestion patterns here.
 
 ## Topics to Cover
 
-Gather information on these aspects:
+Gather information on these aspects through **grilling**:
 
 1. Core features and functionality
 2. Target audience
@@ -25,45 +26,20 @@ Gather information on these aspects:
 6. Data storage and management
 7. Authentication (if relevant) and security
 8. Third-party integrations (if relevant)
-9.  [optional] Wireframes or diagrams
+9. [optional] Wireframes or diagrams
 10. [optional] Competitive landscape
 11. Execution prerequisites: database access, service access, MCPs, documentation, environment variables, and login/test users
 12. Dependencies
 
-## Questioning Patterns
-
-- Start broad: "Tell me about your app idea at a high level"
-- Core features: "What are the 3-5 core features that make this valuable?"
-- Priorities: "Which features are must-haves for the initial version?"
-- User journeys: "Walk me through what a user does from opening the app to completing their main goal"
-- Competition: "What similar products exist? What should yours do differently?"
-- Assumptions: "What are you assuming about your users, technology, or market?"
-- Wireframes: "Can you explain the flow and what happens when users interact with each screen?"
-- Reflective: "So if I understand correctly, you're building [summary]. Is that accurate?"
-
-## Technology Discussions
-
-- Provide 3-4 options with pros/cons
-- Give your best recommendation with brief reasoning
-- Stay conceptual, not deeply technical
-- Proactively suggest technologies the idea requires
-- If the user provides technology preferences, use them to guide your recommendations
-- Use AskUserQuestion tool to ask about a11y
-  *NB:* only include a11y tasks if the user request it. Keep in mind what they build might not have a UI or be a prototype.
-- Use AskUserQuestion tool to ask about performance considerations
-  *NB:* only include performance tasks if the user request it. Keep in mind what they build might not have a UI or be a prototype.
-
-**Example**: "For this app, you could use React Native (cross-platform, faster development) or native development (better performance, device integration). Given your need for camera integration and offline support, I'd recommend native development."
-
 ## PRD Creation Workflow
 
-**CRITICAL**: Don't create the PRD until you have all necessary information, including needed libraries, frameworks, 3rd party integrations, etc. Use AskUserQuestion tool multiple times to clarify specs, technology choices, and requirements.
+**CRITICAL**: Don't create the PRD until you have all necessary information, including needed libraries, frameworks, 3rd party integrations, etc. Use **grilling** skill for all clarification.
 
 Copy and track progress through these steps:
 
 ```
 PRD Progress:
-- [ ] Gather all required information via questioning
+- [ ] Gather all required information via grilling skill
 - [ ] Verify project prerequisites and create `.env.local` placeholders
 - [ ] Create executive summary for user validation
 - [ ] Get user confirmation to proceed
@@ -75,13 +51,11 @@ PRD Progress:
 
 ### Step 1: Gather Information and Verify Prerequisites
 
-Use AskUserQuestion tool repeatedly to clarify:
-- Core features that are unclear
-- Technology options and user preferences
-- Priorities between conflicting requirements
-- Any assumptions that could significantly impact the PRD
-
-Ask related questions per tool call for efficiency. Provide 3-4 clear options per question with trade-off descriptions. Mark recommended options with "(Recommended)".
+Invoke **grilling** skill to:
+- Clarify core features that are unclear
+- Present technology options and user preferences with trade-offs
+- Resolve priorities between conflicting requirements
+- Surface assumptions that could significantly impact the PRD
 
 #### Mandatory Prerequisite Gate
 
@@ -123,7 +97,7 @@ Use WebSearch to:
 - Find similar products: "[app category] apps 2026", "best [problem space] tools"
 - Identify differentiators
 - Use the findings to further refine the PRD
-- For each identified differentiator, use the AskUserQuestion tool to clarify if it should be included in the PRD
+- For each identified differentiator, use **grilling** skill to clarify if it should be included in the PRD
 
 ### Step 4: Generate PRD
 
@@ -204,7 +178,7 @@ When users provide wireframes or mockups:
    - State changes on interaction
    - Navigation flow between screens
    - Data sources
-3. Ask clarifying questions via AskUserQuestion tool:
+3. Use **grilling** skill for clarifying questions:
    - "What happens when the user clicks [element]?"
    - "Where does [data/content] come from?"
    - "What error states should we handle?"
@@ -224,8 +198,8 @@ Once the PRD is complete and approved, inform the user:
 
 Before saving the PRD:
 
-- [ ] Asked clarifying questions with lettered options
-- [ ] Incorporated user's answers
+- [ ] Used **grilling** skill for structured questioning
+- [ ] Incorporated user's answers from grilling rounds
 - [ ] Verified prerequisites before executive summary validation
 - [ ] Created or updated `PROJECT_ROOT/.env.local` with placeholder values only
 - [ ] Documented required environment variable names without secret values
