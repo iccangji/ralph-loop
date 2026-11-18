@@ -317,6 +317,17 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   # A DONE tag is only the agent's claim; the reviewer's verdict is the evidence.
   # Nothing is marked complete until the task branch lands on the PRD branch.
   COMPLETED_TAG_IDS=$(extract_completed_task_ids "$TAG_OUTPUT")
+
+  # The reviewer's verdict is the evidence; the DONE tag is only the lead's
+  # claim. A lead that narrates the tag instead of emitting it must not strand
+  # a real PASS. merge still re-checks every SHA, so a stale verdict fails.
+  VERDICT_FILE=$(factory_verdict_path "$TASK_ID")
+  if [ -z "$COMPLETED_TAG_IDS" ] && [ -f "$VERDICT_FILE" ] \
+     && jq -e '.verdict == "PASS"' "$VERDICT_FILE" >/dev/null 2>&1; then
+    log_warn "No DONE tag for $TASK_ID, but a PASS verdict exists; merging on the verdict."
+    COMPLETED_TAG_IDS="$TASK_ID"
+  fi
+
   MERGE_FAILED=0
   MERGED_TAG_IDS=""
   for task_id in $COMPLETED_TAG_IDS; do

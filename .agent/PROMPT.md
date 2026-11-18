@@ -82,10 +82,20 @@ Read the verdict file.
 
 ## Promise tags
 
+A tag only counts when it is the literal text in your final message. Saying
+"emit the done promise" does nothing; the host scans the transcript for the tag
+itself. Put it on its own line as the last line you write.
+
 | Tag | Meaning |
 |---|---|
 | `<promise>TASK-{id}:DONE</promise>` | Reviewer returned PASS. Host will merge. |
 | `<promise>BLOCKED:reason</promise>` | You cannot deliver; the host aborts and stops. |
 | `<promise>DECIDE:question</promise>` | A human must choose; the host aborts and stops. |
+
+For `TASK-003` after a PASS, your final message ends with exactly:
+
+```
+<promise>TASK-003:DONE</promise>
+```
 
 Do not emit `COMPLETE`. The host decides when the queue is empty.

@@ -57,5 +57,6 @@ Hard rules:
 - Never write `.agent/tasks.json` or `.agent/logs/LOG.md`.
 - If the reviewer returns FAIL, send the defect list back to the coder. After
   two failed rounds emit `<promise>BLOCKED:review failed</promise>`.
-- When the reviewer writes PASS, emit `<promise>TASK-{id}:DONE</promise>` and
-  stop.
+- When the reviewer writes PASS, your final message ends with the literal
+  `<promise>TASK-{id}:DONE</promise>` on its own line. Narrating the tag does
+  not emit it; the host scans for the text itself.
