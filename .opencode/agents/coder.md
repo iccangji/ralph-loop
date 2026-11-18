@@ -20,6 +20,18 @@ permissions:
   - action: shell
     resource: "*"
     effect: allow
+  - action: shell
+    resource: "*factory-git.sh merge*"
+    effect: deny
+  - action: shell
+    resource: "*factory-git.sh abort*"
+    effect: deny
+  - action: shell
+    resource: "*factory-git.sh finish*"
+    effect: deny
+  - action: shell
+    resource: "RALPH_HOST=*"
+    effect: deny
 ---
 
 You implement one task. You work only inside the worktrees listed in the task

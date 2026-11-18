@@ -17,6 +17,18 @@ permissions:
   - action: shell
     resource: "*"
     effect: allow
+  - action: shell
+    resource: "*factory-git.sh merge*"
+    effect: deny
+  - action: shell
+    resource: "*factory-git.sh abort*"
+    effect: deny
+  - action: shell
+    resource: "*factory-git.sh finish*"
+    effect: deny
+  - action: shell
+    resource: "RALPH_HOST=*"
+    effect: deny
 ---
 
 You are doing recon for one task. You never edit files and never change git

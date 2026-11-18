@@ -26,6 +26,18 @@ permissions:
   - action: write
     resource: ".agent/reports/*"
     effect: allow
+  - action: shell
+    resource: "*factory-git.sh merge*"
+    effect: deny
+  - action: shell
+    resource: "*factory-git.sh abort*"
+    effect: deny
+  - action: shell
+    resource: "*factory-git.sh finish*"
+    effect: deny
+  - action: shell
+    resource: "RALPH_HOST=*"
+    effect: deny
 ---
 
 You review one task. You did not write this code and you must not trust the

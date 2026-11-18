@@ -207,7 +207,10 @@ across repos: a conflict in one repo resets every already-merged repo to its
 pre-merge SHA.
 
 `prepare` clears stale verdicts. `merge`, `abort`, and `finish --push` require
-`RALPH_HOST=1`, which `ralph.sh` sets only for its own calls.
+`RALPH_HOST=1`, which `ralph.sh` sets only for its own calls. The agent
+permissions also deny `factory-git.sh merge|abort|finish` and `RALPH_HOST=*`, so
+a hallucinated call is refused by the tool layer too. This is a cooperation
+boundary, not a sandbox: a shell a user hands an agent is still a shell.
 
 ### Circuit breaker
 

@@ -26,6 +26,18 @@ permissions:
   - action: subagent
     resource: reviewer
     effect: allow
+  - action: shell
+    resource: "*factory-git.sh merge*"
+    effect: deny
+  - action: shell
+    resource: "*factory-git.sh abort*"
+    effect: deny
+  - action: shell
+    resource: "*factory-git.sh finish*"
+    effect: deny
+  - action: shell
+    resource: "RALPH_HOST=*"
+    effect: deny
 ---
 
 You are the factory lead for one task. You do not write code and you do not

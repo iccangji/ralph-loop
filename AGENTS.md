@@ -191,8 +191,9 @@ The PRD branch is created lazily at the first task that touches a repo.
 - **Merges are all-or-nothing.** A conflict in one repo resets every
   already-merged repo to its pre-merge SHA.
 - **Host-only verbs.** `merge`, `abort`, and `finish --push` require
-  `RALPH_HOST=1`, which `ralph.sh` sets only for its own calls. The agent cannot
-  land its own work.
+  `RALPH_HOST=1`, which `ralph.sh` sets only for its own calls. Agent
+  permissions also deny those `factory-git.sh` verbs and `RALPH_HOST=*`. This is
+  a cooperation boundary, not a sandbox.
 - **Abort on failure.** A provider error, `BLOCKED`, `DECIDE`, a failed review,
   or a failed merge runs `factory-git.sh abort`, which removes the worktree,
   deletes the task branch, and deletes the verdict. It never touches the PRD
