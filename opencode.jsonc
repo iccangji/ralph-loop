@@ -2,6 +2,12 @@
   "$schema": "https://opencode.ai/config.json",
   "model": "9router/combo1",
   "default_agent": "build",
+  "agents": {
+    "factory-lead": { "model": "9router/combo1" },
+    "researcher": { "model": "9router/combo1" },
+    "coder": { "model": "9router/combo1" },
+    "reviewer": { "model": "9router/combo1" }
+  },
   "permissions": [
     { "action": "shell", "resource": "*", "effect": "allow" },
     { "action": "edit", "resource": "*", "effect": "allow" },

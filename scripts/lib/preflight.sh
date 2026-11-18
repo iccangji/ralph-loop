@@ -77,6 +77,72 @@ check_opencode_config() {
   fi
 }
 
+# The whole task chain depends on four project agents resolving from the repo
+# root, which is the agent's cwd. Missing definitions are a startup failure, not
+# a task failure.
+# Usage: check_factory_agents
+check_factory_agents() {
+  local resolved
+  if ! resolved=$(cd "$SCRIPT_DIR" && timeout 30 opencode debug agents 2>/dev/null); then
+    log_error "Could not list opencode agents ('opencode debug agents' failed)."
+    exit $EXIT_RUNTIME_ERROR
+  fi
+
+  local id
+  local missing=""
+  for id in "$RALPH_FACTORY_AGENT" researcher coder reviewer; do
+    if ! printf '%s' "$resolved" | jq -e --arg id "$id" 'any(.[]; .id == $id)' >/dev/null 2>&1; then
+      missing="$missing $id"
+    fi
+  done
+
+  if [ -n "$missing" ]; then
+    log_error "Missing agent definition(s):$missing"
+    log_error "Expected them in $SCRIPT_DIR/.opencode/agents/."
+    exit $EXIT_RUNTIME_ERROR
+  fi
+
+  mkdir -p "$SCRIPT_DIR/.agent/reports"
+}
+
+# prepare/merge run from this script, so a missing or non-executable copy is a
+# startup failure, not a task failure.
+# Usage: check_factory_script
+check_factory_script() {
+  local script="$SCRIPT_DIR/scripts/factory-git.sh"
+
+  if [ ! -f "$script" ]; then
+    log_error "Required file missing: scripts/factory-git.sh"
+    exit $EXIT_RUNTIME_ERROR
+  fi
+
+  if [ ! -x "$script" ]; then
+    chmod +x "$script" 2>/dev/null || {
+      log_error "scripts/factory-git.sh is not executable."
+      exit $EXIT_RUNTIME_ERROR
+    }
+  fi
+}
+
+# A runnable task whose PRD has no slug fails inside prepare with
+# EXIT_GIT_SLUG_MISSING. Say so before the loop starts, while it is still a
+# one-line fix. Complete tasks are exempt: legacy PRDs must stay runnable-free.
+# Usage: check_prd_slugs
+check_prd_slugs() {
+  local index="$SCRIPT_DIR/.agent/tasks.json"
+  [ -f "$index" ] || return 0
+
+  local id prd slug
+  while IFS= read -r id; do
+    [ -n "$id" ] || continue
+    prd=$(task_prd_file "$id" 2>/dev/null) || continue
+    [ -f "$prd" ] || continue
+    slug=$(frontmatter_value "$prd" slug)
+    factory_valid_slug "$slug" && continue
+    log_warn "$(basename "$prd") has pending task $id but no valid 'slug'; prepare will refuse it."
+  done < <(jq -r '.[] | select(.status == "pending" or .passes == false) | .id' "$index" 2>/dev/null)
+}
+
 # Provider base URLs the active agent will talk to, one per line.
 provider_base_urls() {
   local config_home="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
