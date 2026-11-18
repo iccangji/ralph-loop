@@ -4,7 +4,7 @@
 # Dependencies: constants.sh, agents.sh
 
 # Parse command line arguments
-# Sets: MAX_ITERATIONS, ONCE_FLAG, RALPH_AGENT, AGENT_EXTRA_ARGS, NO_ROLLBACK, MAX_RETRIES
+# Sets: MAX_ITERATIONS, ONCE_FLAG, RALPH_AGENT, AGENT_EXTRA_ARGS, NO_ROLLBACK, MAX_RETRIES, AUTO_PUBLISH
 # Usage: parse_arguments "$@"
 parse_arguments() {
   MAX_ITERATIONS=10
@@ -13,6 +13,7 @@ parse_arguments() {
   AGENT_EXTRA_ARGS=()
   NO_ROLLBACK=false
   MAX_RETRIES="$DEFAULT_MAX_RETRIES"
+  AUTO_PUBLISH=false
 
   while [[ $# -gt 0 ]]; do
     case $1 in
@@ -66,6 +67,14 @@ parse_arguments() {
         ;;
       --no-rollback)
         NO_ROLLBACK=true
+        shift
+        ;;
+      --publish)
+        AUTO_PUBLISH=true
+        shift
+        ;;
+      --publish=*)
+        AUTO_PUBLISH="${1#*=}"
         shift
         ;;
       [0-9]*)

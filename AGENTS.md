@@ -218,6 +218,16 @@ PRD but does not run them:
 RALPH_HOST=1 ./scripts/factory-git.sh finish PRD-002 --push
 ```
 
+To publish automatically without manual step, run Ralph with `--publish`:
+
+```bash
+# Bitbucket
+BITBUCKET_API_TOKEN=xxx ./ralph.sh --publish
+
+# GitHub (needs gh auth)
+./ralph.sh --publish
+```
+
 `finish` warns when the base branch has moved and prints the rebase command; it
 never rebases for you.
 

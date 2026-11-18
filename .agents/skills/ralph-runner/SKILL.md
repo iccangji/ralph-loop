@@ -14,6 +14,7 @@ Execute the complete Ralph autonomous loop from PRD → tasks → implementation
 | Single iteration (smoke test) | `./ralph.sh --once` |
 | Full autonomous run | `./ralph.sh` |
 | Max N iterations | `./ralph.sh --max-iterations N` |
+| **Auto-publish on completion** | `./ralph.sh --publish` |
 | Publish finished PRD (Bitbucket) | `BITBUCKET_API_TOKEN=xxx RALPH_HOST=1 ./scripts/factory-git.sh finish PRD-001 --push` |
 | Publish finished PRD (GitHub) | `RALPH_HOST=1 ./scripts/factory-git.sh finish PRD-001 --push` |
 | Check task status | `./scripts/factory-git.sh status TASK-003` |
@@ -56,20 +57,23 @@ Before running, verify:
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│ 3. FULL RUN                                                      │
-│    ./ralph.sh                                                   │
+│ 3. FULL RUN (choose ONE)                                        │
+│    ./ralph.sh                              # Manual publish     │
+│    ./ralph.sh --publish                   # Auto-publish       │
 │    # Runs until all tasks completed or circuit breaker trips    │
 │    # Exit codes: 0=done, 1=max iter, 2=blocked, 3=decide, 7=breaker │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│ 4. PUBLISH (when queue drains, Ralph prints commands)           │
-│    # For Bitbucket:                                             │
-│    export BITBUCKET_API_TOKEN="your-token"                      │
-│    RALPH_HOST=1 ./scripts/factory-git.sh finish PRD-001 --push  │
-│    # For GitHub:                                                │
-│    RALPH_HOST=1 ./scripts/factory-git.sh finish PRD-001 --push  │
+│ 4. PUBLISH                                                       │
+│    If --publish was used:                                        │
+│    Bitbucket: BITBUCKET_API_TOKEN=xxx RALPH_HOST=1               │
+│               ./scripts/factory-git.sh finish PRD-001 --push    │
+│    GitHub:    RALPH_HOST=1                                       │
+│               ./scripts/factory-git.sh finish PRD-001 --push    │
+│    If --publish NOT used:                                        │
+│    Ralph prints commands; human runs them manually              │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -93,6 +97,7 @@ Before running, verify:
 ./ralph.sh --max-retries 5           # Override default 3 (circuit breaker)
 ./ralph.sh --no-rollback             # Keep workspace state on failure (debug)
 ./ralph.sh --agent opencode          # Explicit (only valid value)
+./ralph.sh --publish                 # Auto-push and create PRs when done
 ./ralph.sh -- --model combo1         # Extra args forwarded to opencode
 ```
 
@@ -142,7 +147,7 @@ cp .agent/tasks.json.example .agent/tasks.json
 ./ralph.sh --once
 # → Verifies pipeline works end-to-end
 
-# 3. Full run
+# 3. Full run (Option A: manual publish)
 ./ralph.sh
 # → Runs iterations until all tasks complete
 # → Prints finish commands when queue drains:
@@ -150,10 +155,17 @@ cp .agent/tasks.json.example .agent/tasks.json
 #      git -C 'workspace/simple-notes-api' push -u origin 'feat/user-auth'
 #      gh -R 'git@github.com:org/repo.git' pr create --base main --head feat/user-auth ...
 
-# 4. Publish (Bitbucket example)
+# 4. Publish manually (Bitbucket example)
 export BITBUCKET_API_TOKEN="atlassian-api-token"
 RALPH_HOST=1 ./scripts/factory-git.sh finish PRD-001 --push
 # → Pushes branch, creates PR via Bitbucket REST API
+
+# ── OR ──
+
+# 3b. Full run (Option B: auto-publish on completion)
+export BITBUCKET_API_TOKEN="atlassian-api-token"
+./ralph.sh --publish
+# → Runs all tasks, then automatically executes finish PRD-001 --push on drain!
 
 # 5. Verify
 git -C workspace/simple-notes-api log --oneline feat/user-auth -3

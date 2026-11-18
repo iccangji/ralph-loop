@@ -103,7 +103,7 @@ COMPOSE_PROJECT_NAME=$(compose_project_name)
 # Early exit if all tasks already passed
 if all_tasks_passed; then
   log_success "All tasks already complete. Nothing to do."
-  factory_print_finish_commands
+  factory_finish_completed_prds "$AUTO_PUBLISH"
   exit $EXIT_COMPLETE
 fi
 
@@ -126,7 +126,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   TASK_ID=$(select_next_task "$SCRIPT_DIR/.agent/tasks.json" "$SCRIPT_DIR/.agent/tasks")
   if [ -z "$TASK_ID" ]; then
     log_success "No runnable tasks remaining."
-    factory_print_finish_commands
+    factory_finish_completed_prds "$AUTO_PUBLISH"
     exit $EXIT_COMPLETE
   fi
 
@@ -376,7 +376,7 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
     echo -e "  ⏱️  Total time: ${Y}$ELAPSED_STR${R}"
     display_session_step_totals
     echo -e "${GR}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
-    factory_print_finish_commands
+    factory_finish_completed_prds "$AUTO_PUBLISH"
     exit $EXIT_COMPLETE
   fi
 

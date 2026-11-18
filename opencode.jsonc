@@ -1,23 +1,27 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "model": "9router/combo1",
-  "default_agent": "build",
+  "default_agent": "factory-lead",
   "agents": {
     "factory-lead": { "model": "9router/combo1" },
     "researcher": { "model": "9router/combo1" },
     "coder": { "model": "9router/combo1" },
-    "reviewer": { "model": "9router/combo1" }
+    "reviewer": { "model": "9router/combo1" },
   },
   "permissions": [
     { "action": "shell", "resource": "*", "effect": "allow" },
     { "action": "edit", "resource": "*", "effect": "allow" },
     { "action": "external_directory", "resource": "*", "effect": "deny" },
-    { "action": "external_directory", "resource": "*/.agent/reports/*", "effect": "allow" },
+    {
+      "action": "external_directory",
+      "resource": "*/.agent/reports/*",
+      "effect": "allow",
+    },
     { "action": "shell", "resource": "git push*", "effect": "deny" },
     { "action": "shell", "resource": "rm -rf *", "effect": "deny" },
     { "action": "shell", "resource": "sudo rm -rf *", "effect": "deny" },
     { "action": "shell", "resource": "sudo rm -fr *", "effect": "deny" },
     { "action": "shell", "resource": "rm -rf /tmp*", "effect": "allow" },
-    { "action": "shell", "resource": "sudo rm -rf /tmp*", "effect": "allow" }
-  ]
+    { "action": "shell", "resource": "sudo rm -rf /tmp*", "effect": "allow" },
+  ],
 }

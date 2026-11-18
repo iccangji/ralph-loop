@@ -159,6 +159,7 @@ worktree as cwd. When absent, the coder derives the project's commands.
 ## Options
 
 - `--once`: Run a single iteration and stop.
+- `--publish`: Automatically push PRD branches and create PRs when all tasks complete (requires `BITBUCKET_API_TOKEN` for Bitbucket or `gh` for GitHub).
 - `--agent AGENT`, `-a AGENT`: Only `opencode` is valid.
 - `--max-iterations N`: Maximum iterations before stopping (default: 10).
 - `--max-retries N`: Consecutive failed iterations before the circuit breaker

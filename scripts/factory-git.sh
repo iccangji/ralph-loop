@@ -490,18 +490,28 @@ cmd_finish() {
         else
           local repo_slug
           repo_slug=$(echo "$remote" | sed -E 's/.*[:/]([^/]+)\/([^/.]+)(\.git)?$/\1\/\2/')
-          local pr_body
-          pr_body=$(cat "$prd" | sed ':a;N;$!ba;s/\n/\\n/g; s/"/\\"/g')
-          local payload
-          payload=$(printf '{"title":"%s","description":"%s","sourceBranch":{"name":"%s"},"destinationBranch":{"name":"%s"},"closeSourceBranch":false}' \
-            "$type($slug): $title" "$pr_body" "$branch" "$base")
-          if curl -s -X POST -H "Authorization: Bearer $BITBUCKET_API_TOKEN" \
-               -H "Content-Type: application/json" \
-               -d "$payload" \
-               "https://api.bitbucket.org/2.0/repositories/$repo_slug/pullrequests" >/dev/null; then
-            log_success "$name: Bitbucket PR created"
+          local payload http_code
+          payload=$(jq -n --arg title "$type($slug): $title" --rawfile desc "$prd" \
+            --arg branch "$branch" --arg base "$base" \
+            '{title: $title, description: $desc,
+              sourceBranch: {name: $branch}, destinationBranch: {name: $base},
+              closeSourceBranch: false}') || payload=""
+          if [ -z "$payload" ]; then
+            log_warn "$name: jq unavailable; open the PR manually."
           else
-            log_warn "$name: Bitbucket PR create failed (may already exist)"
+            http_code=$(curl -s -o /tmp/opencode/bitbucket-pr-resp.json -w '%{http_code}' \
+              -X POST -H "Authorization: Bearer ${BITBUCKET_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "$payload" \
+              "https://api.bitbucket.org/2.0/repositories/$repo_slug/pullrequests")
+            case "$http_code" in
+              200)
+                log_success "$name: Bitbucket PR created ($(cat /tmp/opencode/bitbucket-pr-resp.json | jq -r '.links.html.href // ""'))"
+                ;;
+              *)
+                log_error "$name: Bitbucket PR create failed (HTTP $http_code): $(head -c 300 /tmp/opencode/bitbucket-pr-resp.json)"
+                ;;
+            esac
           fi
         fi
         ;;

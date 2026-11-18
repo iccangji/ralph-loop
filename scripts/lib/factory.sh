@@ -400,10 +400,11 @@ factory_warn_multiple_prds() {
   fi
 }
 
-# Print `finish` for every PRD whose tasks are all completed and which has a
-# PRD branch. Called once the queue drains; print-only, never pushes.
-# Usage: factory_print_finish_commands
-factory_print_finish_commands() {
+# Print `finish` (or run it with --push if AUTO_PUBLISH=true) for every PRD
+# whose tasks are all completed and which has a PRD branch.
+# Usage: factory_finish_completed_prds [push_flag]
+factory_finish_completed_prds() {
+  local push="${1:-false}"
   local prd prd_name slug spec id status all_done printed=0
 
   for prd in "$SCRIPT_DIR"/.agent/prd/*.md; do
@@ -432,10 +433,24 @@ factory_print_finish_commands() {
 
     if [ "$printed" -eq 0 ]; then
       echo ""
-      log_info "PRD branches are ready to publish:"
+      if [ "$push" = true ]; then
+        log_info "Publishing completed PRD branches:"
+      else
+        log_info "PRD branches are ready to publish:"
+      fi
       printed=1
     fi
-    "$SCRIPT_DIR/scripts/factory-git.sh" finish "$prd_name" 2>/dev/null || true
+
+    if [ "$push" = true ]; then
+      RALPH_HOST=1 "$SCRIPT_DIR/scripts/factory-git.sh" finish "$prd_name" --push || true
+    else
+      "$SCRIPT_DIR/scripts/factory-git.sh" finish "$prd_name" 2>/dev/null || true
+    fi
   done
+}
+
+# Backwards-compatible alias: print-only
+factory_print_finish_commands() {
+  factory_finish_completed_prds false
 }
 

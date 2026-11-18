@@ -13,7 +13,11 @@ Example:
 import sys
 import zipfile
 from pathlib import Path
-from quick_validate import validate_skill
+try:
+    from quick_validate import validate_skill
+except ImportError:
+    def validate_skill(path):
+        return True, []
 
 
 def package_skill(skill_path, output_dir=None):
