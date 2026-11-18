@@ -311,3 +311,131 @@ factory_task_prd_id() {
   factory_load_prd "$task" >/dev/null || return 1
   printf '%s' "$FACTORY_PRD_ID"
 }
+
+# Remove every trace of a task: worktrees, task branches, manifest, task dir,
+# verdict, and report. Never touches the PRD branch or the integration worktree.
+# Usage: factory_discard_task "$manifest" TASK-003
+factory_discard_task() {
+  local manifest="$1"
+  local task="$2"
+
+  if [ -f "$manifest" ]; then
+    local name source worktree branch
+    while IFS=$'\t' read -r name source worktree branch; do
+      [ -n "$name" ] || continue
+      if [ -d "$worktree" ]; then
+        git -C "$source" worktree remove --force "$worktree" >/dev/null 2>&1 || rm -rf "$worktree"
+      fi
+      git -C "$source" branch -D "$branch" >/dev/null 2>&1 || true
+    done < <(jq -r '.repos[] | [.name, .source, .worktree, .task_branch] | @tsv' "$manifest" 2>/dev/null)
+
+    rm -rf "$(dirname "$manifest")"
+  fi
+
+  rm -f "$(factory_verdict_path "$task")" 2>/dev/null || true
+  rm -f "$SCRIPT_DIR/.agent/reports/$task.md" 2>/dev/null || true
+}
+
+# Workspace repos, one path per line. Worktrees are skipped because their .git
+# is a file, and a nested repo would otherwise be treated as a source.
+factory_source_repos() {
+  local ws="$SCRIPT_DIR/workspace"
+  local gitdir
+
+  if [ -d "$ws/.git" ]; then
+    printf '%s\n' "$ws"
+    return 0
+  fi
+
+  find "$ws" -maxdepth 2 -name .git -type d 2>/dev/null | while IFS= read -r gitdir; do
+    dirname "$gitdir"
+  done
+}
+
+# A run that crashes leaves worktrees and branches behind. No task can be live
+# before the loop starts, so discarding every manifest at boot is safe.
+# Usage: factory_cleanup_orphans
+factory_cleanup_orphans() {
+  local manifest task slug
+
+  while IFS= read -r manifest; do
+    [ -n "$manifest" ] || continue
+    task=$(jq -r '.task_id // empty' "$manifest" 2>/dev/null)
+    slug=$(jq -r '.slug // empty' "$manifest" 2>/dev/null)
+    if [ -z "$task" ] || [ -z "$slug" ]; then
+      log_warn "Ignoring unreadable manifest: $manifest"
+      continue
+    fi
+    log_warn "Discarding orphaned task $task from a previous run."
+    factory_discard_task "$manifest" "$task"
+  done < <(find "$(factory_root)" -maxdepth 3 -name .manifest.json 2>/dev/null)
+
+  local repo
+  while IFS= read -r repo; do
+    [ -n "$repo" ] || continue
+    git -C "$repo" worktree prune >/dev/null 2>&1 || true
+  done < <(factory_source_repos)
+}
+
+# Selection runs across every PRD. Interleaving is allowed, but more than one
+# live PRD means more than one branch in flight, which is worth saying out loud.
+# Usage: factory_warn_multiple_prds
+factory_warn_multiple_prds() {
+  local tasks_index="$SCRIPT_DIR/.agent/tasks.json"
+  [ -f "$tasks_index" ] || return 0
+
+  local prds
+  prds=$(
+    jq -r '.[] | select(.status == "pending") | .id' "$tasks_index" 2>/dev/null \
+      | while IFS= read -r id; do
+          jq -r '.prd // empty' "$SCRIPT_DIR/.agent/tasks/$id.json" 2>/dev/null
+        done \
+      | sort -u
+  )
+
+  local count
+  count=$(printf '%s\n' "$prds" | grep -c . || true)
+  if [ "$count" -gt 1 ]; then
+    log_warn "Pending tasks span $count PRDs; their branches will interleave."
+  fi
+}
+
+# Print `finish` for every PRD whose tasks are all completed and which has a
+# PRD branch. Called once the queue drains; print-only, never pushes.
+# Usage: factory_print_finish_commands
+factory_print_finish_commands() {
+  local prd prd_name slug spec id status all_done printed=0
+
+  for prd in "$SCRIPT_DIR"/.agent/prd/*.md; do
+    [ -f "$prd" ] || continue
+    prd_name=$(basename "$prd" .md)
+    slug=$(frontmatter_value "$prd" slug)
+    factory_valid_slug "$slug" || continue
+    [ -d "$(factory_slug_dir "$slug")/_integration" ] || continue
+
+    all_done=true
+    while IFS= read -r spec; do
+      [ -n "$spec" ] || continue
+      if [ "$(jq -r '.prd // empty' "$spec" 2>/dev/null)" != ".agent/prd/$prd_name.md" ]; then
+        continue
+      fi
+      id=$(jq -r '.id // empty' "$spec" 2>/dev/null)
+      status=$(jq -r --arg id "$id" '.[] | select(.id == $id) | .status' \
+        "$SCRIPT_DIR/.agent/tasks.json" 2>/dev/null)
+      if [ "$status" != "completed" ]; then
+        all_done=false
+        break
+      fi
+    done < <(find "$SCRIPT_DIR/.agent/tasks" -maxdepth 1 -name '*.json' -type f 2>/dev/null | sort)
+
+    [ "$all_done" = true ] || continue
+
+    if [ "$printed" -eq 0 ]; then
+      echo ""
+      log_info "PRD branches are ready to publish:"
+      printed=1
+    fi
+    "$SCRIPT_DIR/scripts/factory-git.sh" finish "$prd_name" 2>/dev/null || true
+  done
+}
+

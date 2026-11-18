@@ -8,6 +8,11 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WORK="${TMPDIR:-/tmp}/factory-git-test.$$"
 FAILED=0
 
+# Everything this script touches lives under $WORK. Pinning cwd there means a
+# failed `cd` cannot make a stray `git commit` land in the caller's repo.
+mkdir -p "$WORK"
+cd "$WORK" || exit 1
+
 cleanup() { rm -rf "$WORK"; }
 trap cleanup EXIT
 
@@ -122,17 +127,17 @@ fi
 expect_code 12 $? "merge without a verdict is refused"
 
 # coder commits inside the worktrees
-cd "$ROOT/workspace/.worktrees/demo-feature/TASK-901/api"
-printf 'api changed\n' >> file.txt
-git add file.txt && git commit -q -m "feat: api change"
-API_HEAD=$(git rev-parse HEAD)
+API_TASK="$ROOT/workspace/.worktrees/demo-feature/TASK-901/api"
+WEB_TASK="$ROOT/workspace/.worktrees/demo-feature/TASK-901/web"
+printf 'api changed\n' >> "$API_TASK/file.txt"
+git -C "$API_TASK" add file.txt && git -C "$API_TASK" commit -q -m "feat: api change"
+API_HEAD=$(git -C "$API_TASK" rev-parse HEAD)
 
 # commit the operator checkout to simulate a coder working in the wrong place
 git -C "$ROOT/workspace/web" checkout -q -b side
-cd "$ROOT/workspace/.worktrees/demo-feature/TASK-901/web"
-printf 'web changed\n' >> file.txt
-git add file.txt && git commit -q -m "feat: web change"
-WEB_HEAD=$(git rev-parse HEAD)
+printf 'web changed\n' >> "$WEB_TASK/file.txt"
+git -C "$WEB_TASK" add file.txt && git -C "$WEB_TASK" commit -q -m "feat: web change"
+WEB_HEAD=$(git -C "$WEB_TASK" rev-parse HEAD)
 git -C "$ROOT/workspace/web" checkout -q main
 
 BASE_API=$(jq -r '.repos[] | select(.name=="api") | .base_sha' \
@@ -217,14 +222,14 @@ WEB_INTEG="$ROOT/workspace/.worktrees/demo-feature/_integration/web"
 printf 'conflicting line from integration\n' > "$WEB_INTEG/conflict.txt"
 git -C "$WEB_INTEG" add conflict.txt && git -C "$WEB_INTEG" commit -q -m "chore: integration edit"
 
-cd "$ROOT/workspace/.worktrees/demo-feature/TASK-904/web"
-printf 'conflicting line from task\n' > conflict.txt
-git add conflict.txt && git commit -q -m "feat: task edit"
-WEB_TASK_HEAD=$(git rev-parse HEAD)
-cd "$ROOT/workspace/.worktrees/demo-feature/TASK-904/api"
-printf 'harmless\n' >> file.txt
-git add file.txt && git commit -q -m "feat: harmless api edit"
-API_TASK_HEAD=$(git rev-parse HEAD)
+TASK904_WEB="$ROOT/workspace/.worktrees/demo-feature/TASK-904/web"
+TASK904_API="$ROOT/workspace/.worktrees/demo-feature/TASK-904/api"
+printf 'conflicting line from task\n' > "$TASK904_WEB/conflict.txt"
+git -C "$TASK904_WEB" add conflict.txt && git -C "$TASK904_WEB" commit -q -m "feat: task edit"
+WEB_TASK_HEAD=$(git -C "$TASK904_WEB" rev-parse HEAD)
+printf 'harmless\n' >> "$TASK904_API/file.txt"
+git -C "$TASK904_API" add file.txt && git -C "$TASK904_API" commit -q -m "feat: harmless api edit"
+API_TASK_HEAD=$(git -C "$TASK904_API" rev-parse HEAD)
 
 BASE2_API=$(jq -r '.repos[] | select(.name=="api") | .base_sha' \
   "$ROOT/workspace/.worktrees/demo-feature/TASK-904/.manifest.json")

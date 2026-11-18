@@ -51,32 +51,6 @@ shell_quote() {
 # prepare
 # ---------------------------------------------------------------------------
 
-# Remove every trace of a task: worktrees, task branches, manifest, task dir,
-# verdict, and report. Never touches the PRD branch or the integration worktree.
-# Usage: factory_discard_task "$manifest" "$task"
-factory_discard_task() {
-  local manifest="$1"
-  local task="$2"
-
-  if [ -f "$manifest" ]; then
-    local name source worktree branch
-    while IFS=$'\t' read -r name source worktree branch; do
-      [ -n "$name" ] || continue
-      if [ -d "$worktree" ]; then
-        git -C "$source" worktree remove --force "$worktree" >/dev/null 2>&1 || rm -rf "$worktree"
-      fi
-      git -C "$source" branch -D "$branch" >/dev/null 2>&1 || true
-    done < <(jq -r '.repos[] | [.name, .source, .worktree, .task_branch] | @tsv' "$manifest" 2>/dev/null)
-
-    local task_root
-    task_root=$(dirname "$manifest")
-    rm -rf "$task_root"
-  fi
-
-  rm -f "$(factory_verdict_path "$task")" 2>/dev/null || true
-  rm -f "$SCRIPT_DIR/.agent/reports/$task.md" 2>/dev/null || true
-}
-
 prepare_one_repo() {
   local task="$1"
   local slug="$2"
@@ -395,7 +369,7 @@ cmd_abort() {
   while IFS= read -r repo; do
     [ -n "$repo" ] || continue
     git -C "$repo" worktree prune >/dev/null 2>&1 || true
-  done < <(find "$SCRIPT_DIR/workspace" -maxdepth 2 -name .git -print 2>/dev/null | xargs -r -n1 dirname)
+  done < <(factory_source_repos)
   return 0
 }
 

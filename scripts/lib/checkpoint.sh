@@ -4,7 +4,9 @@
 # Dependencies: constants.sh, logging.sh
 
 # Discover all git repositories under workspace/
-# Returns paths (one per line) of git repo roots
+# Returns paths (one per line) of git repo roots.
+# Task worktrees live under workspace/.worktrees and are deliberately skipped:
+# they are owned by factory-git.sh, not by the checkpoint/rollback path.
 find_workspace_git_repos() {
   local ws="$SCRIPT_DIR/workspace"
 
@@ -13,7 +15,8 @@ find_workspace_git_repos() {
     return
   fi
 
-  find "$ws" -maxdepth 3 -name .git -type d 2>/dev/null | while IFS= read -r gitdir; do
+  find "$ws" -maxdepth 3 -name .git -type d \
+    -not -path '*/.worktrees/*' 2>/dev/null | while IFS= read -r gitdir; do
     dirname "$gitdir"
   done
 }

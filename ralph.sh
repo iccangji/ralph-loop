@@ -26,6 +26,7 @@ source "$SCRIPT_DIR/scripts/lib/tasks.sh"
 source "$SCRIPT_DIR/scripts/lib/graphify.sh"
 source "$SCRIPT_DIR/scripts/lib/notify.sh"
 source "$SCRIPT_DIR/scripts/lib/checkpoint.sh"
+source "$SCRIPT_DIR/scripts/lib/factory.sh"
 source "$SCRIPT_DIR/scripts/lib/selector.sh"
 source "$SCRIPT_DIR/scripts/lib/agents.sh"
 source "$SCRIPT_DIR/scripts/lib/display.sh"
@@ -75,6 +76,9 @@ check_history_dir
 check_ansi_support
 check_agent
 check_opencode_config
+check_factory_agents
+check_factory_script
+check_prd_slugs
 check_provider_reachable
 check_stack_capability
 
@@ -85,6 +89,12 @@ prepare_project_skills
 # Reset any orphaned in_progress tasks from previous crash/interrupt
 reset_in_progress
 
+# A crashed run leaves worktrees and branches behind; no task can be live yet.
+factory_cleanup_orphans
+factory_warn_multiple_prds
+
+FACTORY_SCRIPT="$SCRIPT_DIR/scripts/factory-git.sh"
+
 # Stable compose project name for this checkout. The agent inherits it, so
 # down_project_stack can find the containers it started.
 export COMPOSE_PROJECT_NAME
@@ -93,6 +103,7 @@ COMPOSE_PROJECT_NAME=$(compose_project_name)
 # Early exit if all tasks already passed
 if all_tasks_passed; then
   log_success "All tasks already complete. Nothing to do."
+  factory_print_finish_commands
   exit $EXIT_COMPLETE
 fi
 
@@ -115,6 +126,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   TASK_ID=$(select_next_task "$SCRIPT_DIR/.agent/tasks.json" "$SCRIPT_DIR/.agent/tasks")
   if [ -z "$TASK_ID" ]; then
     log_success "No runnable tasks remaining."
+    factory_print_finish_commands
     exit $EXIT_COMPLETE
   fi
 
@@ -125,6 +137,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   TASK_STEPS=$(echo "$TASK_SPEC" | jq -r '.steps[]')
   TASK_ACCEPTANCE=$(echo "$TASK_SPEC" | jq -r '.acceptance_criteria[]')
   TASK_PRD=$(echo "$TASK_SPEC" | jq -r '.prd // empty')
+  TASK_VERIFY=$(echo "$TASK_SPEC" | jq -c '.verify // []')
 
   echo -e "${C}  → Selected task: ${Y}$TASK_ID${R} - ${Y}$TASK_TITLE${R}"
 
@@ -137,10 +150,12 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   # next to the workspace, not inside it.
   PROMPT_CONTENT="PROJECT_ROOT=$SCRIPT_DIR/workspace
 AGENT_DIR=$SCRIPT_DIR/.agent
+FACTORY_SCRIPT=$FACTORY_SCRIPT
 CURRENT_TASK_ID=$TASK_ID
 CURRENT_TASK_TITLE=$TASK_TITLE
 CURRENT_TASK_DESCRIPTION=$TASK_DESCRIPTION
 CURRENT_TASK_PRD=$TASK_PRD
+CURRENT_TASK_VERIFY=$TASK_VERIFY
 CURRENT_TASK_STEPS=$(printf '%s\n' "$TASK_STEPS" | sed 's/^/  /')
 CURRENT_TASK_ACCEPTANCE=$(printf '%s\n' "$TASK_ACCEPTANCE" | sed 's/^/  /')
 
@@ -240,6 +255,7 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
       echo -e "  Invalid API key or unreachable provider."
     fi
     rm -f "$OUTPUT_FILE" "$FULL_OUTPUT_FILE"
+    RALPH_HOST=1 "$FACTORY_SCRIPT" abort "$TASK_ID" >/dev/null 2>&1 || true
     if echo "$PROVIDER_ERROR_MESSAGE $OUTPUT" \
       | grep -qiE 'api key|auth|unauthorized|forbidden|401|403'; then
       exit $EXIT_AUTH_ERROR
@@ -298,15 +314,21 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   PREV_ITERATION_TIME=$ITERATION_DURATION
 
   # Host updates .agent/tasks.json and LOG.md whenever completed task tags appear.
-  # If the agent emitted COMPLETE without a TASK tag and only one incomplete task
-  # was pending, mark that task complete too so tasks.json stays in sync.
+  # A DONE tag is only the agent's claim; the reviewer's verdict is the evidence.
+  # Nothing is marked complete until the task branch lands on the PRD branch.
   COMPLETED_TAG_IDS=$(extract_completed_task_ids "$TAG_OUTPUT")
-  if [ -z "$COMPLETED_TAG_IDS" ] && has_complete_tag "$TAG_OUTPUT"; then
-    INCOMPLETE_IDS=$(jq -r '[.[] | select(.status != "completed" and .passes != true) | .id] | if length == 1 then .[0] else empty end' "$TASKS_FILE" 2>/dev/null)
-    if [ -n "$INCOMPLETE_IDS" ]; then
-      COMPLETED_TAG_IDS="$INCOMPLETE_IDS"
+  MERGE_FAILED=0
+  MERGED_TAG_IDS=""
+  for task_id in $COMPLETED_TAG_IDS; do
+    if RALPH_HOST=1 "$FACTORY_SCRIPT" merge "$task_id"; then
+      MERGED_TAG_IDS="$MERGED_TAG_IDS $task_id"
+    else
+      MERGE_FAILED=1
+      log_error "Task $task_id could not be merged; discarding its worktree."
+      RALPH_HOST=1 "$FACTORY_SCRIPT" abort "$task_id" >/dev/null 2>&1 || true
     fi
-  fi
+  done
+  COMPLETED_TAG_IDS=$(printf '%s\n' $MERGED_TAG_IDS)
 
   for task_id in $COMPLETED_TAG_IDS; do
     mark_task_complete "$task_id"
@@ -328,7 +350,7 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   down_project_stack
 
   # Check for completion signal
-  if has_complete_tag "$TAG_OUTPUT" || all_tasks_passed; then
+  if [ "$MERGE_FAILED" = 0 ] && { has_complete_tag "$TAG_OUTPUT" || all_tasks_passed; }; then
     ELAPSED=$(($(date +%s) - START_TIME))
     ELAPSED_STR=$(format_duration $ELAPSED)
     echo ""
@@ -343,12 +365,14 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
     echo -e "  ⏱️  Total time: ${Y}$ELAPSED_STR${R}"
     display_session_step_totals
     echo -e "${GR}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
+    factory_print_finish_commands
     exit $EXIT_COMPLETE
   fi
 
   # Check for BLOCKED tag - agent needs human help
   if has_blocked_tag "$TAG_OUTPUT"; then
     BLOCKED_REASON=$(extract_blocked_reason "$TAG_OUTPUT")
+    RALPH_HOST=1 "$FACTORY_SCRIPT" abort "$TASK_ID" >/dev/null 2>&1 || true
     ELAPSED=$(($(date +%s) - START_TIME))
     ELAPSED_STR=$(format_duration $ELAPSED)
     play_notification_sound
@@ -367,6 +391,7 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   # Check for DECIDE tag - agent needs human decision
   if has_decide_tag "$TAG_OUTPUT"; then
     DECIDE_QUESTION=$(extract_decide_question "$TAG_OUTPUT")
+    RALPH_HOST=1 "$FACTORY_SCRIPT" abort "$TASK_ID" >/dev/null 2>&1 || true
     ELAPSED=$(($(date +%s) - START_TIME))
     ELAPSED_STR=$(format_duration $ELAPSED)
     play_notification_sound
@@ -383,9 +408,11 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   fi
 
   # Rollback / Circuit Breaker logic
-  # Check if any task was completed this iteration
-  if [ -z "$COMPLETED_TASK_IDS" ] && ! has_complete_tag "$TAG_OUTPUT"; then
+  # Check if any task was completed this iteration. A failed merge counts as a
+  # failed iteration even when another task in the same run did land.
+  if { [ -z "$COMPLETED_TASK_IDS" ] && ! has_complete_tag "$TAG_OUTPUT"; } || [ "$MERGE_FAILED" = 1 ]; then
     CONSECUTIVE_FAILURES=$((CONSECUTIVE_FAILURES + 1))
+    RALPH_HOST=1 "$FACTORY_SCRIPT" abort "$TASK_ID" >/dev/null 2>&1 || true
     echo -e "${RD}  ⚠️  Iteration $i completed without completing a task${R} (failures: $CONSECUTIVE_FAILURES/${MAX_RETRIES})"
 
     if [ "$NO_ROLLBACK" != true ]; then
