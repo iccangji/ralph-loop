@@ -42,7 +42,7 @@ You will use the **grilling skill** to interview the user relentlessly about eve
 - Creates executive summary for validation
 - Researches competitive landscape
 - Generates comprehensive PRD-{ID}.md with:
-  - YAML frontmatter: `id` (e.g., "PRD-001"), `title`, `created_at` (ISO 8601)
+  - YAML frontmatter: `id` (e.g., "PRD-001"), `slug` (kebab-case, names the git branch), `type` (`feat` by default), `title`, `created_at` (ISO 8601)
   - App overview and objectives
   - Target audience
   - Success metrics and KPIs
@@ -79,7 +79,7 @@ You will need to analyze the completed PRD and generate a comprehensive task lis
 - Generates a complete list of implementation tasks in JSON format, covering all features and requirements from the PRD
 - Keeps the tasks small and manageable
 - Categorizes tasks by type (functional, ui-ux, api-endpoint, security, etc.)
-- Defines verification steps using `status` enum (pending/completed) at both task and step level
+- Defines per-repo `verify` commands so the coder and reviewer run the same checks
 - Creates developer-ready checklist with explicit `depends_on` arrays for deterministic ordering
 - Adds `prd` field to each `TASK-{ID}.json` spec pointing to `.agent/prd/PRD-{ID}.md`
 
@@ -87,7 +87,7 @@ You will need to analyze the completed PRD and generate a comprehensive task lis
 - Each task should be simple enough to be completed in maximum 10 minutes.
 - If a task is too complex, it should be split into smaller tasks.
 - Tasks use `status: "pending"` initially (not `passes: false`)
-- Steps use `status: "pending"` initially (not `pass: false`)
+- Steps are plain strings; only the task carries a status
 - Generate explicit `depends_on` arrays for ALL tasks (fully deterministic)
 - Do NOT mention `in_progress` status (runtime-only, managed by ralph.sh)
 - TASK-1 is optional - skip if PRD has no prerequisites section
@@ -148,7 +148,7 @@ The description should be short, concise and contain:
 ## After completion
 
 Ensure the required files are present:
-- PROJECT_ROOT/.agent/prd/PRD-{ID}.md (with frontmatter id, title, created_at)
+- PROJECT_ROOT/.agent/prd/PRD-{ID}.md (with frontmatter id, slug, type, title, created_at)
 - PROJECT_ROOT/.agent/prd/SUMMARY.md
 - PROJECT_ROOT/.agent/tasks.json
 - PROJECT_ROOT/.agent/tasks/TASK-{ID}.json (each with `"prd": ".agent/prd/PRD-{ID}.md"`)

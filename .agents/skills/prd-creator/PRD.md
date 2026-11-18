@@ -9,7 +9,7 @@ Help beginner-level developers transform software ideas into comprehensive PRD-{
 3. Verify project prerequisites (access, MCPs, docs, env vars, test users)
 4. Create executive summary for user validation
 5. Research competitive landscape (if applicable)
-6. Generate comprehensive PRD-{ID}.md with frontmatter (id, title, created_at)
+6. Generate comprehensive PRD-{ID}.md with frontmatter (id, slug, type, title, created_at)
 7. Iterate based on feedback
 
 **CRITICAL**: Use the **grilling** skill for all structured questioning. It handles the interview tree, rounds, recommended answers, and shared understanding mapping. Do NOT inline questioning prose or AskUserQuestion patterns here.
@@ -43,14 +43,33 @@ Each PRD file MUST begin with YAML frontmatter:
 ```yaml
 ---
 id: "PRD-001"
+slug: "simple-notes-app"
+type: "feat"
 title: "Simple Notes App (API + Webapp)"
 created_at: "2026-11-17T14:30:00Z"
 ---
 ```
 
-- `id`: Matches the filename suffix (e.g., "PRD-001")
+- `id`: Matches the filename suffix (e.g., "PRD-001"). Stable key for tasks and
+  reports.
+- `slug`: Required. Kebab-case, `^[a-z0-9]+(-[a-z0-9]+)*$`, at most 40 chars,
+  unique across PRDs. It names the git branches, so it must not change after the
+  first task runs.
+- `type`: Optional, defaults to `feat`. One of `feat`, `fix`, `refactor`,
+  `chore`, `docs`, `test`, `perf`.
 - `title`: Human-readable project name
 - `created_at`: ISO 8601 timestamp of creation
+
+Branch names are derived from the slug, never from the title:
+
+| Artifact | Name |
+|---|---|
+| PRD branch | `feat/simple-notes-app` |
+| Task branch | `feat/simple-notes-app-TASK-003` |
+| Worktree | `workspace/.worktrees/simple-notes-app/TASK-003/<repo>` |
+
+Task branches are siblings of the PRD branch because git cannot hold both
+`feat/x` and `feat/x/TASK-1` as refs.
 
 ## PRD Creation Workflow
 
@@ -227,4 +246,5 @@ Before saving the PRD:
 - [ ] User stories are small and specific
 - [ ] Functional requirements are numbered and unambiguous
 - [ ] Non-goals section defines clear boundaries
-- [ ] Saved to `PROJECT_ROOT/.agent/prd/PRD-{ID}.md` with frontmatter (id, title, created_at)
+- [ ] Saved to `PROJECT_ROOT/.agent/prd/PRD-{ID}.md` with frontmatter (id, slug, type, title, created_at)
+- [ ] `slug` is kebab-case, unique, and will still describe the PRD after implementation

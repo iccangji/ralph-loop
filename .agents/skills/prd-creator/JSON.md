@@ -23,6 +23,7 @@ Task Generation Progress:
 - [ ] Generate prerequisite verification task (optional, only if PRD has prerequisites)
 - [ ] Generate task index in `PROJECT_ROOT/.agent/tasks.json` (minimal, no prd field)
 - [ ] Generate detailed spec for each task in `PROJECT_ROOT/.agent/tasks/TASK-${ID}.json` (with prd field pointing to .agent/prd/PRD-{ID}.md)
+- [ ] Fill `verify` for every task that changes code
 - [ ] Present complete task list to user for review
 ```
 
@@ -54,7 +55,7 @@ Use this shape for the prerequisite task:
   "category": "setup",
   "prd": ".agent/prd/PRD-001.md",
   "description": "Verify that required database access, MCPs, service documentation, environment variables, and login/test users are available before implementation begins.",
-  "acceptanceCriteria": [
+  "acceptance_criteria": [
     "`PROJECT_ROOT/.env.local` exists with placeholder entries for every required environment variable name listed in the PRD",
     "Real secret values are not written to the PRD, task specs, repository, logs, or chat",
     "The user has manually filled required local secret values in `.env.local` where needed",
@@ -64,44 +65,15 @@ Use this shape for the prerequisite task:
     "Required login/test users are available or documented with request/create steps, without passwords or secret values"
   ],
   "steps": [
-    {
-      "step": 1,
-      "description": "Read prerequisite requirements from the PRD",
-      "details": "Open `PROJECT_ROOT/.agent/prd/PRD-{ID}.md` and review the `Prerequisites and Access` section. List required database access, MCPs, service docs, environment variable names, login/test users, and any open gaps.",
-      "status": "pending"
-    },
-    {
-      "step": 2,
-      "description": "Verify `.env.local` placeholder names",
-      "details": "Confirm `PROJECT_ROOT/.env.local` exists and contains every required environment variable name from the PRD. Add missing names with placeholder values only, such as `TODO_FILL_MANUALLY`. Do not write real secret values.",
-      "status": "pending"
-    },
-    {
-      "step": 3,
-      "description": "Confirm local secret values are filled manually",
-      "details": "Ask the user to confirm they filled real local values where needed. Never print, store, commit, or copy actual passwords, API keys, tokens, or connection strings into generated files or chat.",
-      "status": "pending"
-    },
-    {
-      "step": 4,
-      "description": "Verify database and service access",
-      "details": "Run the safest available read-only connectivity checks for the database and required services. If access cannot be verified, record the blocker or user-approved proceed decision before continuing.",
-      "status": "pending"
-    },
-    {
-      "step": 5,
-      "description": "Verify MCPs and service documentation",
-      "details": "Confirm required MCP servers/tools are available and authenticated. Confirm required documentation links from the PRD are accessible and sufficient for implementation.",
-      "status": "pending"
-    },
-    {
-      "step": 6,
-      "description": "Verify login/test user availability",
-      "details": "Confirm required login/test users exist with the needed roles and permissions, or document the exact steps and owner for creating/requesting them. Do not store passwords or secret values.",
-      "status": "pending"
-    }
+    "Read the `Prerequisites and Access` section of `PROJECT_ROOT/.agent/prd/PRD-001.md` and list required database access, MCPs, service docs, environment variable names, login/test users, and open gaps",
+    "Confirm `PROJECT_ROOT/.env.local` exists and contains every required environment variable name; add missing names with placeholder values only, such as `TODO_FILL_MANUALLY`",
+    "Ask the user to confirm they filled real local values where needed; never print, store, commit, or copy actual secrets",
+    "Run the safest available read-only connectivity checks for the database and required services; record any blocker or user-approved proceed decision",
+    "Confirm required MCP servers/tools are available and authenticated, and that required documentation links are accessible",
+    "Confirm required login/test users exist with the needed roles, or document the exact steps and owner for creating/requesting them"
   ],
   "depends_on": [],
+  "verify": [],
   "estimatedComplexity": "low",
   "technicalNotes": [
     "This task gates implementation. Do not start dependent feature tasks until required prerequisites are verified or explicitly approved as gaps.",
@@ -158,18 +130,17 @@ Each task specification file provides comprehensive details for implementation. 
   "category": "category-name",
   "prd": ".agent/prd/PRD-001.md",
   "description": "In-depth specification including expected behavior, user flow, and output",
-  "acceptanceCriteria": [
+  "acceptance_criteria": [
     "List of specific, verifiable conditions that must be true when task is complete"
   ],
   "steps": [
-    {
-      "step": 1,
-      "description": "Short description of what to do",
-      "details": "Detailed explanation of HOW to do it, including specific code, commands, or techniques",
-      "status": "pending"
-    }
+    "First action, with the exact file or command",
+    "Second action, including how to verify it"
   ],
   "depends_on": ["TASK-${ID1}", "TASK-${ID2}"],
+  "verify": [
+    { "repo": "simple-notes-api", "commands": ["npm test", "npm run build"] }
+  ],
   "estimatedComplexity": "medium",
   "technicalNotes": [
     "List of technical notes, implementation hints, or technical constraints developers should know"
@@ -179,43 +150,38 @@ Each task specification file provides comprehensive details for implementation. 
 
 ### Required Fields
 
-| Field                | Type                  | Description                                                                     |
-| -------------------- | --------------------- | ------------------------------------------------------------------------------- |
-| `id`                 | string                | Unique identifier, formatted as `TASK-${ID}`                                    |
-| `title`              | string                | High-level overview of the task (same as in tasks.json)                         |
-| `category`           | string                | Classification of task type                                                     |
-| `description`        | string                | In-depth specification including expected behavior, user flow, and output       |
-| `acceptanceCriteria` | array of strings      | List of specific, verifiable conditions that must be true when task is complete |
-| `steps`              | array of step objects | Sequential implementation steps (see step format below)                         |
-| `depends_on`         | array of strings      | Explicit array of prerequisite task IDs (`[]` if none)                          |
+| Field                 | Type             | Description                                                                     |
+| --------------------- | ---------------- | ------------------------------------------------------------------------------- |
+| `id`                  | string           | Unique identifier, formatted as `TASK-${ID}`                                    |
+| `title`               | string           | High-level overview of the task (same as in tasks.json)                         |
+| `category`            | string           | Classification of task type                                                     |
+| `description`         | string           | In-depth specification including expected behavior, user flow, and output       |
+| `acceptance_criteria` | array of strings | List of specific, verifiable conditions that must be true when task is complete |
+| `steps`               | array of strings | Sequential actions, each naming the file or command involved                    |
+| `depends_on`          | array of strings | Explicit array of prerequisite task IDs (`[]` if none)                          |
 
 ### Optional Fields
 
-| Field                 | Type             | Description                                                                      |
-| --------------------- | ---------------- | -------------------------------------------------------------------------------- |
-| `prd`                 | string           | File path to the source PRD document (e.g. `.agent/prd/PRD-001.md`)               |
-| `estimatedComplexity` | string           | One of: `"low"`, `"medium"`, `"high"`, `"very high"` - helps with planning       |
-| `technicalNotes`      | array of strings | Implementation hints, gotchas, or technical constraints developers should know   |
+| Field                 | Type                      | Description                                                                      |
+| --------------------- | ------------------------- | -------------------------------------------------------------------------------- |
+| `prd`                 | string                    | File path to the source PRD document (e.g. `.agent/prd/PRD-001.md`)               |
+| `verify`              | array of repo/command sets | Commands the coder runs before committing and the reviewer re-runs before PASS    |
+| `estimatedComplexity` | string                    | One of: `"low"`, `"medium"`, `"high"`, `"very high"` - helps with planning       |
+| `technicalNotes`      | array of strings          | Implementation hints, gotchas, or technical constraints developers should know   |
 
-### Step Object Format
-
-Each step in the `steps` array must be an object with these fields:
+### Verify Field Format
 
 ```json
-{
-  "step": 1,
-  "description": "Short description of what to do",
-  "details": "Detailed explanation of HOW to do it, including specific code, commands, or techniques",
-  "status": "pending"
-}
+"verify": [
+  { "repo": "simple-notes-api", "commands": ["npm test", "npm run build"] },
+  { "repo": "*", "commands": ["make lint"] }
+]
 ```
 
-| Field         | Type   | Description                                                                     |
-| ------------- | ------ | ------------------------------------------------------------------------------- |
-| `step`        | number | Sequential step number (1, 2, 3...)                                             |
-| `description` | string | Brief summary of the step (what to do)                                          |
-| `details`     | string | Comprehensive implementation guidance (how to do it)                            |
-| `status`      | string | Always initialize to `"pending"` - updated to `"completed"` once verified done |
+- `repo` is a directory name under `workspace/`. `"*"` runs the commands in every repo the task touches.
+- Commands run with the task worktree as cwd, never the operator's checkout.
+- Omit `verify` when the project has no useful check; the coder then derives the project's own commands and the reviewer records what it actually ran.
+- Keep commands fast and deterministic. Do not put commands that need services that only exist outside a worktree (a docker-compose stack, a shared database).
 
 ### Dependency Resolution Rules
 
@@ -264,7 +230,8 @@ Present the tasks to the user:
 
 "I've generated [NUMBER] implementation tasks based on your PRD with explicit dependency ordering and initial status set to 'pending'.
 
-The tasks are saved in `PROJECT_ROOT/.agent/tasks.json`. Developers/Ralph will:
+Each task runs on its own branch cut from the PRD branch (`{type}/{slug}`) and is reviewed by an independent reviewer before it can merge. Tasks are saved in `PROJECT_ROOT/.agent/tasks.json`; Ralph will:
 1. Select tasks deterministically based on priority and satisfied `depends_on`
-2. Mark tasks `status: "completed"` after all verification steps pass
-3. Never remove or skip tasks"
+2. Implement each one in its own worktree
+3. Mark tasks `status: "completed"` only after the reviewer passes and the task branch merges
+4. Never remove or skip tasks"
