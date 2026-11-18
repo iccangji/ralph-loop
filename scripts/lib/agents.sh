@@ -1,13 +1,18 @@
 #!/bin/bash
 # Agent module for ralph.sh
-# Supported agent CLIs, per-run state, command construction
+# opencode CLI only, per-run state, command construction
 # Dependencies: constants.sh, logging.sh
 #
-# Agents run directly on the host, so each run gets its own temporary state
-# directory. Nothing in the operator's home is written by the loop.
+# The agent runs directly on the host with the repo root as its working
+# directory, so each run gets a temporary session database. Nothing in the
+# operator's home is written by the loop.
 
-SUPPORTED_AGENTS="opencode pi"
+SUPPORTED_AGENTS="opencode"
 DEFAULT_AGENT="opencode"
+
+# Primary agent the loop drives. It launches the researcher, coder, and
+# reviewer subagents; see .opencode/agents/.
+RALPH_FACTORY_AGENT="factory-lead"
 
 AGENT_STATE_DIR=""
 SKILLS_LINK_CREATED=false
@@ -21,26 +26,14 @@ normalize_agent_name() {
 }
 
 is_supported_agent() {
-  case "$1" in
-    opencode|pi)
-      return 0
-      ;;
-    *)
-      return 1
-      ;;
-  esac
+  [ "$1" = "opencode" ]
 }
 
 agent_display_name() {
   case "$1" in
     opencode) echo "OpenCode" ;;
-    pi) echo "Pi" ;;
     *) echo "$1" ;;
   esac
-}
-
-agent_login_command() {
-  echo "$1"
 }
 
 # Minimum version the agent CLI must report. Kept in constants.sh so the
@@ -48,7 +41,6 @@ agent_login_command() {
 agent_min_version() {
   case "$1" in
     opencode) echo "$MIN_OPENCODE_VERSION" ;;
-    pi) echo "$MIN_PI_VERSION" ;;
     *) echo "" ;;
   esac
 }
@@ -100,29 +92,12 @@ path_hash() {
   fi
 }
 
-# Per-run state: config copies and session storage for one Ralph run.
+# Per-run state: a throwaway session database for one Ralph run.
 prepare_agent_state() {
   AGENT_STATE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/ralph-${RALPH_AGENT}-XXXXXX") || {
     log_error "Could not create agent state directory"
     exit $EXIT_RUNTIME_ERROR
   }
-
-  case "$RALPH_AGENT" in
-    pi) prepare_pi_state ;;
-  esac
-}
-
-# pi reads models and trust from its agent dir, never from the project .pi/.
-# Copy the project config in and trust only the workspace.
-prepare_pi_state() {
-  local agent_dir="$AGENT_STATE_DIR/pi"
-  mkdir -p "$agent_dir"
-
-  if [ -d "$SCRIPT_DIR/.pi" ]; then
-    cp -R "$SCRIPT_DIR/.pi/." "$agent_dir/" 2>/dev/null || true
-  fi
-
-  printf '{"%s":true}\n' "$SCRIPT_DIR/workspace" > "$agent_dir/trust.json"
 }
 
 cleanup_agent_state() {
@@ -132,39 +107,30 @@ cleanup_agent_state() {
   AGENT_STATE_DIR=""
 }
 
-# opencode discovers project skills from .opencode/skills under its cwd. The
-# workspace is the cwd, so link the canonical repo skills in for the run.
-# The directory is created only when absent and marked ignored, so an agent
-# running `git add -A` cannot commit the per-run link into the project repo.
-prepare_workspace_skills() {
-  [ "$RALPH_AGENT" = "opencode" ] || return 0
-
-  local ws="$SCRIPT_DIR/workspace"
+# opencode discovers project skills from .opencode/skills under its cwd, and
+# the agent's cwd is the repo root. The link is created only when absent and
+# is gitignored, so a run cannot commit it.
+prepare_project_skills() {
   local skills="$SCRIPT_DIR/.agents/skills"
-  [ -d "$ws" ] && [ -d "$skills" ] || return 0
+  [ -d "$skills" ] || return 0
 
-  if [ -e "$ws/.opencode" ] || [ -L "$ws/.opencode" ]; then
+  mkdir -p "$SCRIPT_DIR/.opencode" || return 0
+
+  if [ -e "$SCRIPT_DIR/.opencode/skills" ] || [ -L "$SCRIPT_DIR/.opencode/skills" ]; then
     return 0
   fi
 
-  mkdir -p "$ws/.opencode" || return 0
-  printf '*\n' > "$ws/.opencode/.gitignore" || true
-
-  if ! ln -s "$skills" "$ws/.opencode/skills"; then
-    rm -f "$ws/.opencode/.gitignore" 2>/dev/null || true
-    rmdir "$ws/.opencode" 2>/dev/null || true
+  if ! ln -s "$skills" "$SCRIPT_DIR/.opencode/skills"; then
     return 0
   fi
 
   SKILLS_LINK_CREATED=true
 }
 
-cleanup_workspace_skills() {
+cleanup_project_skills() {
   [ "$SKILLS_LINK_CREATED" = true ] || return 0
 
-  local ws="$SCRIPT_DIR/workspace"
-  rm -f "$ws/.opencode/skills" "$ws/.opencode/.gitignore" 2>/dev/null || true
-  rmdir "$ws/.opencode" 2>/dev/null || true
+  rm -f "$SCRIPT_DIR/.opencode/skills" 2>/dev/null || true
   SKILLS_LINK_CREATED=false
 }
 
@@ -187,33 +153,19 @@ build_agent_command() {
 
   case "$RALPH_AGENT" in
     opencode) build_opencode_command "$extra_args" ;;
-    pi) build_pi_command "$extra_args" ;;
   esac
 }
 
 # opencode: a private server and a throwaway session DB keep the operator's
-# 470 MB session store out of the loop.
+# session store out of the loop. --agent pins the primary agent to the factory
+# lead so interactive use of the repo keeps its own default.
 build_opencode_command() {
   local extra_args="$1"
 
-  printf 'env OPENCODE_DB=%q %q run --format json --auto --standalone' \
-    "$AGENT_STATE_DIR/opencode.db" "opencode"
+  printf 'env OPENCODE_DB=%q %q run --format json --auto --standalone --agent %q' \
+    "$AGENT_STATE_DIR/opencode.db" "opencode" "$RALPH_FACTORY_AGENT"
   if [ -n "$extra_args" ]; then
     printf ' %s' "$extra_args"
   fi
   printf ' %q' "$PROMPT_CONTENT"
-}
-
-build_pi_command() {
-  local extra_args="$1"
-
-  printf 'env PI_CODING_AGENT_DIR=%q %q --mode json --approve --no-session' \
-    "$AGENT_STATE_DIR/pi" "pi"
-  if [ -d "$SCRIPT_DIR/.agents/skills" ]; then
-    printf ' --skill %q' "$SCRIPT_DIR/.agents/skills"
-  fi
-  if [ -n "$extra_args" ]; then
-    printf ' %s' "$extra_args"
-  fi
-  printf ' -p %q' "$PROMPT_CONTENT"
 }

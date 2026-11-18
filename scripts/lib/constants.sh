@@ -3,11 +3,10 @@
 # Contains: Colors, paths, version, exit codes, agent minimum versions
 
 # Version
-VERSION="2.0.0"
+VERSION="3.0.0"
 
-# Minimum agent CLI versions. Agents run on the host, so the installed binary
-# decides the version; Ralph refuses anything older than these floors.
-MIN_PI_VERSION="1.4.0"
+# Minimum agent CLI version. The agent runs on the host, so the installed
+# binary decides the version; Ralph refuses anything older than this floor.
 MIN_OPENCODE_VERSION="1.19.0"
 
 # Colors (short syntax)
@@ -30,6 +29,18 @@ EXIT_RUNTIME_ERROR=4
 EXIT_AUTH_ERROR=5
 EXIT_PROVIDER_ERROR=6
 EXIT_CIRCUIT_BREAKER=7
+
+# factory-git.sh exit codes. Distinct values let the host tell a merge
+# conflict apart from a missing verdict or a moved source checkout.
+EXIT_GIT_USAGE=10
+EXIT_GIT_CONFLICT=11
+EXIT_GIT_NO_VERDICT=12
+EXIT_GIT_VERDICT_STALE=13
+EXIT_GIT_SOURCE_MOVED=14
+EXIT_GIT_SLUG_MISSING=15
+EXIT_GIT_SLUG_COLLISION=16
+EXIT_GIT_DIRTY_SOURCE=17
+EXIT_GIT_MANIFEST=18
 
 # Default circuit breaker max consecutive failures
 DEFAULT_MAX_RETRIES=3

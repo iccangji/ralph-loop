@@ -80,7 +80,7 @@ check_stack_capability
 
 # Per-run agent state (config copies, sessions) and the workspace skill link.
 prepare_agent_state
-prepare_workspace_skills
+prepare_project_skills
 
 # Reset any orphaned in_progress tasks from previous crash/interrupt
 reset_in_progress
@@ -220,7 +220,7 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   OUTPUT=$(cat "$FULL_OUTPUT_FILE" 2>/dev/null || cat "$OUTPUT_FILE")
 
   # Surface provider and authentication failures early. opencode emits a
-  # {"type":"error"} event; pi prints an API-key error and stops.
+  # {"type":"error"} event instead of a plain error line.
   PROVIDER_ERROR_MESSAGE=""
   if [ -f "$OUTPUT_FILE" ] && command -v jq &>/dev/null; then
     PROVIDER_ERROR_MESSAGE=$(jq -R 'fromjson? // empty' "$OUTPUT_FILE" 2>/dev/null \
@@ -255,8 +255,8 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   # Extract final summary before removing files
   FINAL_SUMMARY=$(extract_final_summary "$OUTPUT_FILE")
 
-  # Tag detection reads the raw transcript too: pi streams text in deltas, so a
-  # tag can be split across two preview lines that grep cannot match.
+  # Tag detection reads the raw transcript too, so a tag is never missed when
+  # the preview stream and the final summary disagree.
   TAG_OUTPUT=$(printf '%s\n%s\n%s' "$OUTPUT" "$FINAL_SUMMARY" "$(cat "$HISTORY_FILE" 2>/dev/null)")
 
   rm -f "$FULL_OUTPUT_FILE"

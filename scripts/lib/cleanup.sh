@@ -38,7 +38,7 @@ cleanup() {
   fi
   AGENT_PID=""
 
-  cleanup_workspace_skills
+  cleanup_project_skills
   cleanup_agent_state
 
   # Containers the agent started are not removed with --rm; drop the stack too.

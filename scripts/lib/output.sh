@@ -3,39 +3,9 @@
 # JSON parsing and ANSI stripping utilities
 # Dependencies: constants.sh, terminal.sh
 
-# Extract readable text from one pi JSON event.
-# Text deltas become plain text; tool starts become lines that detect_step()
-# already understands, e.g. "Bash command=npm test" or "Edit file_path=/a.ts".
-# Usage: parse_pi_json_content "<json line>"
-parse_pi_json_content() {
-  local json_line="$1"
-
-  if ! command -v jq &>/dev/null; then
-    return 0
-  fi
-
-  printf '%s' "$json_line" | jq -r '
-    if .type == "message_update" then
-      (.assistantMessageEvent // {}) as $event
-      | if $event.type == "text_delta" then ($event.delta // empty) else empty end
-    elif .type == "tool_execution_start" then
-      (.toolName // "") as $tool
-      | (.args // {}) as $args
-      | if $tool == "bash" then "Bash command=" + ($args.command // "")
-        elif $tool == "write" then "Write file_path=" + ($args.path // "")
-        elif $tool == "edit" then "Edit file_path=" + ($args.path // "")
-        elif $tool == "read" then "Read file_path=" + ($args.path // "")
-        elif $tool == "grep" then "Grep pattern=" + ($args.pattern // "")
-        elif $tool == "find" then "Find pattern=" + ($args.pattern // "")
-        elif $tool == "ls" then "LS path=" + ($args.path // "")
-        else ($tool + " " + ($args | to_entries | map(.key + "=" + (.value | tostring)) | join(" ")))
-        end
-    else empty end' 2>/dev/null
-}
-
 # Extract readable text from one opencode JSON event.
 # opencode emits complete text parts (no deltas) and tool calls under
-# part.state.input, so this mirrors the pi labels used by detect_step().
+# part.state.input, so this maps them to the labels detect_step() expects.
 # Usage: parse_opencode_json_content "<json line>"
 parse_opencode_json_content() {
   local json_line="$1"
@@ -63,73 +33,18 @@ parse_opencode_json_content() {
     else empty end' 2>/dev/null
 }
 
-# Parse JSON stream and extract text content
-# Dispatches on the active agent, then falls back to generic stream-json.
+# Parse one line of the opencode JSON stream and extract readable text.
+# Non-JSON lines (stderr warnings) still belong in the preview.
 parse_json_content() {
   local json_line="$1"
-  local pi_text
+  local text
 
-  if [ "${RALPH_AGENT:-pi}" = "opencode" ]; then
-    local opencode_text
-    opencode_text=$(parse_opencode_json_content "$json_line")
-    if [ -n "$opencode_text" ]; then
-      printf '%s\n' "$opencode_text"
-      return
-    fi
-    # Non-JSON lines (stderr warnings) still belong in the preview.
-    if ! echo "$json_line" | grep -q '^{'; then
-      echo "$json_line"
-    fi
-    return
-  fi
-
-  pi_text=$(parse_pi_json_content "$json_line")
-  if [ -n "$pi_text" ]; then
-    printf '%s\n' "$pi_text"
-    return
-  fi
-
-  # Try to extract text content from various JSON formats
-  # For example, Claude stream-json outputs {"type":"content_block_delta","delta":{"text":"..."}}
-  # or {"type":"text","text":"..."} etc.
-
-  # Extract text from delta (use jq if available for proper escaped quote handling)
-  local text=""
-  if command -v jq &>/dev/null; then
-    text=$(echo "$json_line" | jq -r '.delta.text // .text // empty' 2>/dev/null)
-  else
-    text=$(echo "$json_line" | grep -o '"text":"[^"]*"' | head -1 | LC_ALL=C sed 's/"text":"//;s/"$//' 2>/dev/null)
-  fi
+  text=$(parse_opencode_json_content "$json_line")
   if [ -n "$text" ]; then
-    # Unescape common JSON escapes (only needed for grep fallback, jq handles this)
-    if ! command -v jq &>/dev/null; then
-      text=$(echo "$text" | LC_ALL=C sed 's/\\n/\'$'\n''/g; s/\\t/\'$'\t''/g; s/\\"/"/g; s/\\\\/\\/g' 2>/dev/null)
-    fi
-    echo "$text"
+    printf '%s\n' "$text"
     return
   fi
 
-  # Extract tool_use events (have "name" but no "text")
-  # Produces strings like "Read file_path=/src/main.ts" or "Bash command=npm test"
-  # that detect_step() patterns can match
-  local tool_name=$(echo "$json_line" | grep -o '"name":"[^"]*"' | head -1 | LC_ALL=C sed 's/"name":"//;s/"$//' 2>/dev/null)
-  if [ -n "$tool_name" ]; then
-    local file_path=$(echo "$json_line" | grep -o '"file_path":"[^"]*"' | head -1 | LC_ALL=C sed 's/"file_path":"//;s/"$//' 2>/dev/null)
-    local pattern=$(echo "$json_line" | grep -o '"pattern":"[^"]*"' | head -1 | LC_ALL=C sed 's/"pattern":"//;s/"$//' 2>/dev/null)
-    local cmd=$(echo "$json_line" | grep -o '"command":"[^"]*"' | head -1 | LC_ALL=C sed 's/"command":"//;s/"$//' 2>/dev/null)
-    if [ -n "$file_path" ]; then
-      echo "$tool_name file_path=$file_path"
-    elif [ -n "$pattern" ]; then
-      echo "$tool_name pattern=$pattern"
-    elif [ -n "$cmd" ]; then
-      echo "$tool_name command=$cmd"
-    else
-      echo "$tool_name"
-    fi
-    return
-  fi
-
-  # If it doesn't look like JSON, return as-is
   if ! echo "$json_line" | grep -q '^{'; then
     echo "$json_line"
   fi
@@ -225,11 +140,10 @@ last_complete_line_offset() {
   printf '%s' $((offset + relative))
 }
 
-# Extract final summary from JSON stream output
-# Looks for the result type message (Claude) or the last assistant message (pi)
+# Extract final summary from JSON stream output.
+# opencode emits complete text parts; the last one is the closing message.
 extract_final_summary() {
   local output_file="$1"
-  local result_line=""
   local summary=""
 
   if [ ! -f "$output_file" ]; then
@@ -237,35 +151,9 @@ extract_final_summary() {
     return
   fi
 
-  # Look for the result type message in the JSON stream
-  result_line=$(grep '"type":"result"' "$output_file" 2>/dev/null | tail -1)
-
-  if [ -n "$result_line" ]; then
-    # Extract the result text using jq
-    if command -v jq &> /dev/null; then
-      summary=$(echo "$result_line" | jq -r '.result // ""' 2>/dev/null)
-    fi
-  fi
-
-  # opencode JSON mode: the final assistant text part is the summary.
-  # Text events carry complete parts, so the last one is the closing message.
-  if [ -z "$summary" ] && [ "${RALPH_AGENT:-pi}" = "opencode" ] && command -v jq &> /dev/null; then
+  if command -v jq &>/dev/null; then
     summary=$(jq -R 'fromjson? // empty' "$output_file" 2>/dev/null | jq -rs '
       [ .[] | select(.type == "text") | .part.text ] | last // ""' 2>/dev/null)
-  fi
-
-  # pi JSON mode: use the text of the last assistant message.
-  # The `script` wrapper adds a header and CRLF endings, so records are parsed
-  # one line at a time and non-JSON lines are dropped before the aggregate pass.
-  if [ -z "$summary" ] && [ "${RALPH_AGENT:-pi}" = "pi" ] && command -v jq &> /dev/null; then
-    summary=$(jq -R 'fromjson? // empty' "$output_file" 2>/dev/null | jq -rs '
-      [ .[] | select(.type == "message_end" and .message.role == "assistant") ] | last
-      | if . == null then ""
-        else .message.content
-          | if type == "string" then .
-            else ([ .[]? | select(.type == "text") | .text ] | join("\n"))
-            end
-        end' 2>/dev/null)
   fi
 
   echo "$summary"

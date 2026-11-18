@@ -57,7 +57,7 @@ check_opencode_config() {
   [ "$RALPH_AGENT" = "opencode" ] || return 0
 
   local resolved
-  if ! resolved=$(cd "$SCRIPT_DIR/workspace" && timeout 30 opencode debug config 2>/dev/null); then
+  if ! resolved=$(cd "$SCRIPT_DIR" && timeout 30 opencode debug config 2>/dev/null); then
     log_error "Could not read opencode config ('opencode debug config' failed)."
     exit $EXIT_RUNTIME_ERROR
   fi
@@ -71,7 +71,7 @@ check_opencode_config() {
       and ((.info.permissions // []) | any(.action == "external_directory" and .effect == "deny"))
     )
   ' >/dev/null 2>&1; then
-    log_error "opencode did not load $SCRIPT_DIR/opencode.jsonc from the workspace."
+    log_error "opencode did not load $SCRIPT_DIR/opencode.jsonc from the repo root."
     log_error "Refusing to run without the model pin and permission rules."
     exit $EXIT_RUNTIME_ERROR
   fi
@@ -79,21 +79,13 @@ check_opencode_config() {
 
 # Provider base URLs the active agent will talk to, one per line.
 provider_base_urls() {
-  case "$RALPH_AGENT" in
-    opencode)
-      local config_home="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
-      local candidate
-      for candidate in "$config_home/opencode.jsonc" "$config_home/opencode.json"; do
-        [ -f "$candidate" ] || continue
-        jq -r '.provider[]?.options.baseURL // empty' "$candidate" 2>/dev/null
-      done
-      ;;
-    pi)
-      local models_file="$SCRIPT_DIR/.pi/models.json"
-      [ -f "$models_file" ] || return 0
-      jq -r '.providers[]?.baseUrl // empty' "$models_file" 2>/dev/null
-      ;;
-  esac | awk '!seen[$0]++'
+  local config_home="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
+  local candidate
+  for candidate in "$config_home/opencode.jsonc" "$config_home/opencode.json" \
+                   "$SCRIPT_DIR/opencode.jsonc"; do
+    [ -f "$candidate" ] || continue
+    jq -r '.provider[]?.options.baseURL // empty' "$candidate" 2>/dev/null
+  done | awk '!seen[$0]++'
 }
 
 # Probe the provider before the loop starts: a slow or dead endpoint is the
@@ -173,12 +165,7 @@ check_required_files() {
     missing_required=true
   fi
 
-  if [ "$RALPH_AGENT" = "pi" ] && [ ! -f "$SCRIPT_DIR/.pi/models.json" ]; then
-    log_error "Required file missing for pi: .pi/models.json"
-    missing_required=true
-  fi
-
-  if [ "$RALPH_AGENT" = "opencode" ] && [ ! -f "$SCRIPT_DIR/opencode.jsonc" ]; then
+  if [ ! -f "$SCRIPT_DIR/opencode.jsonc" ]; then
     log_error "Required file missing for opencode: opencode.jsonc"
     missing_required=true
   fi

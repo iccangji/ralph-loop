@@ -13,5 +13,5 @@
 workspace/
 .pi/
 
-# Ralph temp state
-.opencode/
+# Ralph temp state (agents are tracked, the per-run skills link is not)
+.opencode/skills
