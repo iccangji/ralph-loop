@@ -417,7 +417,7 @@ cmd_finish() {
     return $EXIT_GIT_MANIFEST
   fi
 
-  local name integration source base remote
+  local name integration source base remote provider
   for integration in "$integration_dir"/*; do
     [ -d "$integration" ] || continue
     name=$(basename "$integration")
@@ -443,11 +443,35 @@ cmd_finish() {
       continue
     fi
 
+    # Detect provider from remote URL
+    case "$remote" in
+      *bitbucket.org*) provider="bitbucket" ;;
+      *github.com*)    provider="github" ;;
+      *)               provider="unknown" ;;
+    esac
+
     printf '  git -C %s push -u origin %s\n' \
       "$(shell_quote "$source")" "$(shell_quote "$branch")"
-    printf '  gh -R %s pr create --base %s --head %s --title %s --body-file %s\n' \
-      "$(shell_quote "$remote")" "$(shell_quote "$base")" "$(shell_quote "$branch")" \
-      "$(shell_quote "$type($slug): $title")" "$(shell_quote "$prd")"
+
+    case "$provider" in
+      bitbucket)
+        printf '  # Bitbucket REST API (set BITBUCKET_API_TOKEN)\n'
+        printf '  curl -X POST -H "Authorization: Bearer $BITBUCKET_API_TOKEN" \\\n'
+        printf '    -H "Content-Type: application/json" \\\n'
+        printf '    -d "{\"title\":\"%s\",\"description\":\"%s\",\"sourceBranch\":{\"name\":\"%s\"},\"destinationBranch\":{\"name\":\"%s\"},\"closeSourceBranch\":false}" \\\n' \
+          "$type($slug): $title" "$(cat "$prd" | sed ':a;N;$!ba;s/\n/\\n/g; s/"/\\"/g')" "$branch" "$base"
+        printf '    "https://api.bitbucket.org/2.0/repositories/%s/pullrequests"\n' \
+          "$(echo "$remote" | sed -E 's/.*[:/]([^/]+)\/([^/.]+)(\.git)?$/\1\/\2/')"
+        ;;
+      github)
+        printf '  gh -R %s pr create --base %s --head %s --title %s --body-file %s\n' \
+          "$(shell_quote "$remote")" "$(shell_quote "$base")" "$(shell_quote "$branch")" \
+          "$(shell_quote "$type($slug): $title")" "$(shell_quote "$prd")"
+        ;;
+      *)
+        printf '  # Unknown provider; open PR manually\n'
+        ;;
+    esac
 
     if [ "$push" = false ]; then
       continue
@@ -458,13 +482,42 @@ cmd_finish() {
       log_error "$name: push failed."
       return $EXIT_GIT_USAGE
     fi
-    if command -v gh >/dev/null 2>&1; then
-      gh -R "$remote" pr create --base "$base" --head "$branch" \
-        --title "$type($slug): $title" --body-file "$prd" || \
-        log_warn "$name: gh pr create failed (a PR may already exist)."
-    else
-      log_warn "$name: gh not installed; open the PR manually."
-    fi
+
+    case "$provider" in
+      bitbucket)
+        if [ -z "${BITBUCKET_API_TOKEN:-}" ]; then
+          log_warn "$name: BITBUCKET_API_TOKEN not set; PR not created."
+        else
+          local repo_slug
+          repo_slug=$(echo "$remote" | sed -E 's/.*[:/]([^/]+)\/([^/.]+)(\.git)?$/\1\/\2/')
+          local pr_body
+          pr_body=$(cat "$prd" | sed ':a;N;$!ba;s/\n/\\n/g; s/"/\\"/g')
+          local payload
+          payload=$(printf '{"title":"%s","description":"%s","sourceBranch":{"name":"%s"},"destinationBranch":{"name":"%s"},"closeSourceBranch":false}' \
+            "$type($slug): $title" "$pr_body" "$branch" "$base")
+          if curl -s -X POST -H "Authorization: Bearer $BITBUCKET_API_TOKEN" \
+               -H "Content-Type: application/json" \
+               -d "$payload" \
+               "https://api.bitbucket.org/2.0/repositories/$repo_slug/pullrequests" >/dev/null; then
+            log_success "$name: Bitbucket PR created"
+          else
+            log_warn "$name: Bitbucket PR create failed (may already exist)"
+          fi
+        fi
+        ;;
+      github)
+        if command -v gh >/dev/null 2>&1; then
+          gh -R "$remote" pr create --base "$base" --head "$branch" \
+            --title "$type($slug): $title" --body-file "$prd" || \
+            log_warn "$name: gh pr create failed (a PR may already exist)."
+        else
+          log_warn "$name: gh not installed; open the PR manually."
+        fi
+        ;;
+      *)
+        log_warn "$name: unknown provider; open PR manually"
+        ;;
+    esac
   done
 }
 

@@ -53,7 +53,7 @@ make_repo() {
   printf '%s\n' "$content" > "$path/file.txt"
   git -C "$path" add file.txt
   git -C "$path" commit -q -m "init"
-  git -C "$path" remote add origin "git@example.com:test/$(basename "$path").git"
+  git -C "$path" remote add origin "https://github.com/test/$(basename "$path").git"
 }
 
 make_repo "$ROOT/workspace/api" "api"
@@ -268,6 +268,15 @@ if printf '%s' "$OUT" | grep -q "feat(demo-feature): Demo Feature"; then
   pass "finish prints the PR title"
 else
   fail "finish prints the PR title"
+fi
+
+# test bitbucket remote handling
+git -C "$ROOT/workspace/api" remote set-url origin "git@bitbucket.org:myworkspace/api.git"
+BB_OUT=$("$FG" finish PRD-901 2>&1)
+if printf '%s' "$BB_OUT" | grep -q "api.bitbucket.org/2.0/repositories/myworkspace/api/pullrequests"; then
+  pass "finish prints bitbucket curl command for bitbucket remote"
+else
+  fail "finish prints bitbucket curl command for bitbucket remote"
 fi
 
 # --- validation ------------------------------------------------------------
