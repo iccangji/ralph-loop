@@ -494,8 +494,8 @@ cmd_finish() {
           payload=$(jq -n --arg title "$type($slug): $title" --rawfile desc "$prd" \
             --arg branch "$branch" --arg base "$base" \
             '{title: $title, description: $desc,
-              sourceBranch: {name: $branch}, destinationBranch: {name: $base},
-              closeSourceBranch: false}') || payload=""
+              source: {branch: {name: $branch}}, destination: {branch: {name: $base}},
+              close_source_branch: false}') || payload=""
           if [ -z "$payload" ]; then
             log_warn "$name: jq unavailable; open the PR manually."
           else
