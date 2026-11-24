@@ -402,9 +402,10 @@ factory_warn_multiple_prds() {
 
 # Print `finish` (or run it with --push if AUTO_PUBLISH=true) for every PRD
 # whose tasks are all completed and which has a PRD branch.
-# Usage: factory_finish_completed_prds [push_flag]
+# Usage: factory_finish_completed_prds [push_flag] [push_only_flag]
 factory_finish_completed_prds() {
   local push="${1:-false}"
+  local push_only="${2:-false}"
   local prd prd_name slug spec id status all_done printed=0
 
   for prd in "$SCRIPT_DIR"/.agent/prd/*.md; do
@@ -441,7 +442,9 @@ factory_finish_completed_prds() {
       printed=1
     fi
 
-    if [ "$push" = true ]; then
+    if [ "$push_only" = true ]; then
+      RALPH_HOST=1 "$SCRIPT_DIR/scripts/factory-git.sh" finish "$prd_name" --push-only || true
+    elif [ "$push" = true ]; then
       RALPH_HOST=1 "$SCRIPT_DIR/scripts/factory-git.sh" finish "$prd_name" --push || true
     else
       "$SCRIPT_DIR/scripts/factory-git.sh" finish "$prd_name" 2>/dev/null || true

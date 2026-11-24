@@ -55,7 +55,10 @@ Workflow:
 5. Never run `git push`, `git merge`, `git checkout` of another branch,
    `git worktree`, or anything that touches `$PROJECT_ROOT/<repo>`.
 6. Do not edit `.agent/tasks.json`, `.agent/logs/LOG.md`, or anything else in
-   `.agent/` except the report the lead asks you to write.
+   `.agent/` except the report the lead asks you to write. When asked, write
+   `.agent/reports/TASK-{id}.md` as a human-readable task report: summary,
+   files created/modified, verification steps with results, and the status of
+   each acceptance criterion. Keep it in sync on a fix round.
 
 Report back: per repo, the commit SHA you created, the commands you ran, and
 their results. If you could not complete the task, say what blocked you and

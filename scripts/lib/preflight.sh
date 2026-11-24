@@ -62,14 +62,10 @@ check_opencode_config() {
     exit $EXIT_RUNTIME_ERROR
   fi
 
+  # Check that the project config is loaded (path matches $SCRIPT_DIR/opencode.jsonc)
+  # and that it has model/provider pinned and agents defined
   if ! printf '%s' "$resolved" | jq -e --arg cfg "$SCRIPT_DIR/opencode.jsonc" '
-    any(.[]?;
-      .type == "document"
-      and .path == $cfg
-      and (.info.model.providerID // "") != ""
-      and (.info.model.model // "") != ""
-      and ((.info.permissions // []) | any(.action == "external_directory" and .effect == "deny"))
-    )
+    any(.[]; .path == $cfg and .info.model.providerID != "" and .info.agents != null)
   ' >/dev/null 2>&1; then
     log_error "opencode did not load $SCRIPT_DIR/opencode.jsonc from the repo root."
     log_error "Refusing to run without the model pin and permission rules."

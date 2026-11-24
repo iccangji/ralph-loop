@@ -28,9 +28,9 @@ usage() {
 Usage:
   factory-git.sh prepare TASK-{id} --repos repo1,repo2
   factory-git.sh status  TASK-{id}
-  factory-git.sh merge   TASK-{id}          (RALPH_HOST=1)
-  factory-git.sh abort   TASK-{id}          (RALPH_HOST=1)
-  factory-git.sh finish  PRD-{id} [--push]  (--push needs RALPH_HOST=1)
+  factory-git.sh merge   TASK-{id}               (RALPH_HOST=1)
+  factory-git.sh abort   TASK-{id}               (RALPH_HOST=1)
+  factory-git.sh finish  PRD-{id} [--push|--push-only]  (--push/--push-only needs RALPH_HOST=1)
 EOF
   return $EXIT_GIT_USAGE
 }
@@ -383,9 +383,11 @@ cmd_finish() {
   shift
 
   local push=false
+  local push_only=false
   while [ $# -gt 0 ]; do
     case "$1" in
       --push) push=true; shift ;;
+      --push-only) push=true; push_only=true; shift ;;
       *) usage; return $EXIT_GIT_USAGE ;;
     esac
   done
@@ -483,51 +485,55 @@ cmd_finish() {
       return $EXIT_GIT_USAGE
     fi
 
-    case "$provider" in
-      bitbucket)
-        if [ -z "${BITBUCKET_API_TOKEN:-}" ]; then
-          log_warn "$name: BITBUCKET_API_TOKEN not set; PR not created."
-        else
-          local repo_slug
-          repo_slug=$(echo "$remote" | sed -E 's/.*[:/]([^/]+)\/([^/.]+)(\.git)?$/\1\/\2/')
-          local payload http_code
-          payload=$(jq -n --arg title "$type($slug): $title" --rawfile desc "$prd" \
-            --arg branch "$branch" --arg base "$base" \
-            '{title: $title, description: $desc,
-              source: {branch: {name: $branch}}, destination: {branch: {name: $base}},
-              close_source_branch: false}') || payload=""
-          if [ -z "$payload" ]; then
-            log_warn "$name: jq unavailable; open the PR manually."
+    if [ "$push_only" = false ]; then
+      case "$provider" in
+        bitbucket)
+          if [ -z "${BITBUCKET_API_TOKEN:-}" ]; then
+            log_warn "$name: BITBUCKET_API_TOKEN not set; PR not created."
           else
-            http_code=$(curl -s -o /tmp/opencode/bitbucket-pr-resp.json -w '%{http_code}' \
-              -X POST -H "Authorization: Bearer ${BITBUCKET_API_TOKEN}" \
-              -H "Content-Type: application/json" \
-              -d "$payload" \
-              "https://api.bitbucket.org/2.0/repositories/$repo_slug/pullrequests")
-            case "$http_code" in
-              200)
-                log_success "$name: Bitbucket PR created ($(cat /tmp/opencode/bitbucket-pr-resp.json | jq -r '.links.html.href // ""'))"
-                ;;
-              *)
-                log_error "$name: Bitbucket PR create failed (HTTP $http_code): $(head -c 300 /tmp/opencode/bitbucket-pr-resp.json)"
-                ;;
-            esac
+            local repo_slug
+            repo_slug=$(echo "$remote" | sed -E 's/.*[:/]([^/]+)\/([^/.]+)(\.git)?$/\1\/\2/')
+            local payload http_code
+            payload=$(jq -n --arg title "$type($slug): $title" --rawfile desc "$prd" \
+              --arg branch "$branch" --arg base "$base" \
+              '{title: $title, description: $desc,
+                source: {branch: {name: $branch}}, destination: {branch: {name: $base}},
+                close_source_branch: false}') || payload=""
+            if [ -z "$payload" ]; then
+              log_warn "$name: jq unavailable; open the PR manually."
+            else
+              http_code=$(curl -s -o /tmp/opencode/bitbucket-pr-resp.json -w '%{http_code}' \
+                -X POST -H "Authorization: Bearer ${BITBUCKET_API_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d "$payload" \
+                "https://api.bitbucket.org/2.0/repositories/$repo_slug/pullrequests")
+              case "$http_code" in
+                200)
+                  log_success "$name: Bitbucket PR created ($(cat /tmp/opencode/bitbucket-pr-resp.json | jq -r '.links.html.href // ""'))"
+                  ;;
+                *)
+                  log_error "$name: Bitbucket PR create failed (HTTP $http_code): $(head -c 300 /tmp/opencode/bitbucket-pr-resp.json)"
+                  ;;
+              esac
+            fi
           fi
-        fi
-        ;;
-      github)
-        if command -v gh >/dev/null 2>&1; then
-          gh -R "$remote" pr create --base "$base" --head "$branch" \
-            --title "$type($slug): $title" --body-file "$prd" || \
-            log_warn "$name: gh pr create failed (a PR may already exist)."
-        else
-          log_warn "$name: gh not installed; open the PR manually."
-        fi
-        ;;
-      *)
-        log_warn "$name: unknown provider; open PR manually"
-        ;;
-    esac
+          ;;
+        github)
+          if command -v gh >/dev/null 2>&1; then
+            gh -R "$remote" pr create --base "$base" --head "$branch" \
+              --title "$type($slug): $title" --body-file "$prd" || \
+              log_warn "$name: gh pr create failed (a PR may already exist)."
+          else
+            log_warn "$name: gh not installed; open the PR manually."
+          fi
+          ;;
+        *)
+          log_warn "$name: unknown provider; open PR manually"
+          ;;
+      esac
+    else
+      log_info "$name: pushed branch $branch (--push-only, PR creation skipped)"
+    fi
   done
 }
 

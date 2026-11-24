@@ -10,6 +10,13 @@ cd "$SCRIPT_DIR"
 PRD_FILE="$SCRIPT_DIR/.agent/prd/PRD.md"
 PROGRESS_FILE="$SCRIPT_DIR/.agent/logs/LOG.md"
 HISTORY_DIR="$SCRIPT_DIR/.agent/history"
+RUN_LOG_FILE="$SCRIPT_DIR/.agent/logs/ralph-$(date +%Y%m%d-%H%M%S).log"
+
+# Auto-tee all output to run log and persistent ralph.log (disabled via RALPH_NO_LOG=1)
+if [ "${RALPH_NO_LOG:-0}" != "1" ]; then
+  mkdir -p "$(dirname "$RUN_LOG_FILE")"
+  exec > >(tee -a "$SCRIPT_DIR/.agent/logs/ralph.log" "$RUN_LOG_FILE") 2>&1
+fi
 
 source "$SCRIPT_DIR/scripts/lib/constants.sh"
 source "$SCRIPT_DIR/scripts/lib/logging.sh"
@@ -61,6 +68,22 @@ trap handle_interrupt INT
 parse_arguments "$@"
 RALPH_AGENT_NAME=$(agent_display_name "$RALPH_AGENT")
 
+# Single-instance lock: only one Ralph may run per checkout. flock is released
+# by the kernel on exit or crash, so a hard kill never leaves a stale lock.
+LOCK_FILE="$SCRIPT_DIR/.agent/.ralph.lock"
+mkdir -p "$(dirname "$LOCK_FILE")"
+if command -v flock >/dev/null 2>&1; then
+  exec 200>>"$LOCK_FILE"
+  if ! flock -n 200; then
+    HOLDER_PID=$(cat "$LOCK_FILE" 2>/dev/null || true)
+    echo -e "${RD}❌ Another Ralph instance is already running${R}${HOLDER_PID:+ (PID: $HOLDER_PID)}" >&2
+    exit 1
+  fi
+  echo "$$" > "$LOCK_FILE"
+else
+  echo "⚠️  flock not found; single-instance lock disabled" >&2
+fi
+
 # Initialize progress file if it doesn't exist
 if [ ! -f "$PROGRESS_FILE" ]; then
   mkdir -p "$(dirname "$PROGRESS_FILE")"
@@ -103,7 +126,8 @@ COMPOSE_PROJECT_NAME=$(compose_project_name)
 # Early exit if all tasks already passed
 if all_tasks_passed; then
   log_success "All tasks already complete. Nothing to do."
-  factory_finish_completed_prds "$AUTO_PUBLISH"
+  factory_finish_completed_prds "$AUTO_PUBLISH" "$AUTO_PUSH_ONLY"
+  send_webhook "complete" $EXIT_COMPLETE
   exit $EXIT_COMPLETE
 fi
 
@@ -126,7 +150,8 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   TASK_ID=$(select_next_task "$SCRIPT_DIR/.agent/tasks.json" "$SCRIPT_DIR/.agent/tasks")
   if [ -z "$TASK_ID" ]; then
     log_success "No runnable tasks remaining."
-    factory_finish_completed_prds "$AUTO_PUBLISH"
+    factory_finish_completed_prds "$AUTO_PUBLISH" "$AUTO_PUSH_ONLY"
+    send_webhook "complete" $EXIT_COMPLETE
     exit $EXIT_COMPLETE
   fi
 
@@ -134,8 +159,8 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   TASK_SPEC=$(get_task_spec "$SCRIPT_DIR/.agent/tasks" "$TASK_ID")
   TASK_TITLE=$(echo "$TASK_SPEC" | jq -r '.title')
   TASK_DESCRIPTION=$(echo "$TASK_SPEC" | jq -r '.description')
-  TASK_STEPS=$(echo "$TASK_SPEC" | jq -r '.steps[]')
-  TASK_ACCEPTANCE=$(echo "$TASK_SPEC" | jq -r '.acceptance_criteria[]')
+  TASK_STEPS=$(echo "$TASK_SPEC" | jq -r '.steps[]? // empty')
+  TASK_ACCEPTANCE=$(echo "$TASK_SPEC" | jq -r '.acceptance_criteria[]? // empty')
   TASK_PRD=$(echo "$TASK_SPEC" | jq -r '.prd // empty')
   TASK_VERIFY=$(echo "$TASK_SPEC" | jq -c '.verify // []')
 
@@ -258,8 +283,10 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
     RALPH_HOST=1 "$FACTORY_SCRIPT" abort "$TASK_ID" >/dev/null 2>&1 || true
     if echo "$PROVIDER_ERROR_MESSAGE $OUTPUT" \
       | grep -qiE 'api key|auth|unauthorized|forbidden|401|403'; then
+      send_webhook "auth_error" $EXIT_AUTH_ERROR
       exit $EXIT_AUTH_ERROR
     fi
+    send_webhook "provider_error" $EXIT_PROVIDER_ERROR
     exit $EXIT_PROVIDER_ERROR
   fi
 
@@ -376,7 +403,8 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
     echo -e "  ⏱️  Total time: ${Y}$ELAPSED_STR${R}"
     display_session_step_totals
     echo -e "${GR}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
-    factory_finish_completed_prds "$AUTO_PUBLISH"
+    factory_finish_completed_prds "$AUTO_PUBLISH" "$AUTO_PUSH_ONLY"
+    send_webhook "complete" $EXIT_COMPLETE
     exit $EXIT_COMPLETE
   fi
 
@@ -396,6 +424,7 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
     fi
     echo -e "  ⏱️  Total time: ${Y}$ELAPSED_STR${R}"
     display_session_step_totals
+    send_webhook "blocked" $EXIT_BLOCKED "Ralph is BLOCKED on ${TASK_ID}: ${BLOCKED_REASON}"
     exit $EXIT_BLOCKED
   fi
 
@@ -415,6 +444,7 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
     fi
     echo -e "  ⏱️  Total time: ${Y}$ELAPSED_STR${R}"
     display_session_step_totals
+    send_webhook "decide" $EXIT_DECIDE "Ralph needs a decision on ${TASK_ID}: ${DECIDE_QUESTION}"
     exit $EXIT_DECIDE
   fi
 
@@ -439,6 +469,7 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
       echo -e "  Check ${Y}.agent/history/ITERATION-${SESSION_ID}-${i}.txt${R} for details"
       echo -e "  Add guidance to ${Y}.agent/STEERING.md${R} if needed"
       echo -e "${RD}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
+      send_webhook "circuit_breaker" $EXIT_CIRCUIT_BREAKER
       exit $EXIT_CIRCUIT_BREAKER
     fi
   else
@@ -483,4 +514,5 @@ echo -e "  ⏱️  Total time: ${Y}$ELAPSED_STR${R}"
 display_session_step_totals
 echo -e "  📋 Check progress: ${G}$PROGRESS_FILE${R}"
 echo -e "${Y}░░▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒░░${R}"
+send_webhook "max_iterations" $EXIT_MAX_ITERATIONS
 exit $EXIT_MAX_ITERATIONS

@@ -159,6 +159,8 @@ build_agent_command() {
 # opencode: a private server and a throwaway session DB keep the operator's
 # session store out of the loop. --agent pins the primary agent to the factory
 # lead so interactive use of the repo keeps its own default.
+# --dir sets the working directory to the repo root so opencode loads the
+# project config from the correct location.
 build_opencode_command() {
   local extra_args="$1"
 

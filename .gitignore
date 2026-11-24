@@ -4,7 +4,8 @@
 .agent/screenshots/
 .agent/tasks/
 .agent/history/
-.agent/logs/LOG.md
+.agent/logs/
+.agent/.ralph.lock
 
 # Persistent queue (local only - like .env)
 .agent/tasks.json
@@ -15,3 +16,4 @@ workspace/
 
 # Ralph temp state (agents are tracked, the per-run skills link is not)
 .opencode/skills
+nohup.out

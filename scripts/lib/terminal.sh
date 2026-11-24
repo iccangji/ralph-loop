@@ -63,5 +63,5 @@ run_agent_command() {
   local output_file="$1"
   local command="$2"
 
-  bash -c "$command" > "$output_file" 2>&1
+  eval "$command" > "$output_file" 2>&1
 }

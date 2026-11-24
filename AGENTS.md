@@ -20,6 +20,14 @@ The host agent acts strictly as a **Manager and Orchestrator**:
 - **Priority**: inspect `.agent/tasks.json` and the task specs before answering
   questions or planning.
 
+## Outer Orchestrator Planning Boundary (Strict)
+
+- During idea discovery ord PRD decomposition:
+  - **DO read:** `AGENTS.md`, `.agent/docs/prd/*.md`, `.agent/docs/taks/*.json`, and `.agent/tasks.json`.
+  - **DO NOT read:** Application source code (`workspace/`).
+- **When an implementation detail is unknown during the interview:**
+  - Do NOT inspect source code to check. Ask the user directly in plain product/contract terms (e.g., _"Should archived notes be excluded by default, or do we need a filter toggle?"_), or explicitly leave file-level discovery to the inner `tech-lead` -> `researcher` pipeline when `ralph.sh` executes the task.
+
 ## Pipeline
 
 ```
@@ -137,12 +145,12 @@ because more than one PRD branch will then be in flight.
 
 ## Branch and Worktree Model
 
-| Artifact | Name |
-|---|---|
-| PRD branch (per repo) | `{type}/{slug}` |
-| Task branch (per repo) | `{type}/{slug}-TASK-{id}` |
-| Worktree | `workspace/.worktrees/{slug}/TASK-{id}/{repo}` |
-| Integration worktree | `workspace/.worktrees/{slug}/_integration/{repo}` |
+| Artifact               | Name                                              |
+| ---------------------- | ------------------------------------------------- |
+| PRD branch (per repo)  | `{type}/{slug}`                                   |
+| Task branch (per repo) | `{type}/{slug}-TASK-{id}`                         |
+| Worktree               | `workspace/.worktrees/{slug}/TASK-{id}/{repo}`    |
+| Integration worktree   | `workspace/.worktrees/{slug}/_integration/{repo}` |
 
 Task branches are siblings, not children, of the PRD branch: git cannot hold
 both `refs/heads/feat/x` and `refs/heads/feat/x/TASK-1`.
@@ -245,9 +253,11 @@ tests at the real `workspace/`.
 ## Getting Started / Reuse Across Projects
 
 1. **Initialize the queue**:
+
    ```bash
    cp .agent/tasks.json.example .agent/tasks.json
    ```
+
 2. **Pin models** in `opencode.jsonc` under `agents.<id>.model` for
    `factory-lead`, `researcher`, `coder`, and `reviewer`.
 3. **Generate the PRD and tasks**: use the `prd-creator` skill (via grilling) to

@@ -5,13 +5,13 @@ You do not touch git branches. You delegate, read reports, and stop.
 
 The host provides these values at the top of your prompt:
 
-| Variable | Meaning |
-|---|---|
-| `PROJECT_ROOT` | Absolute path to `workspace/` |
-| `AGENT_DIR` | Absolute path to `.agent/` |
-| `FACTORY_SCRIPT` | Absolute path to `scripts/factory-git.sh` |
-| `CURRENT_TASK_ID` | The task you must deliver, e.g. `TASK-003` |
-| `CURRENT_TASK_PRD` | Path to the owning PRD, e.g. `.agent/prd/PRD-002.md` |
+| Variable              | Meaning                                              |
+| --------------------- | ---------------------------------------------------- |
+| `PROJECT_ROOT`        | Absolute path to `workspace/`                        |
+| `AGENT_DIR`           | Absolute path to `.agent/`                           |
+| `FACTORY_SCRIPT`      | Absolute path to `scripts/factory-git.sh`            |
+| `CURRENT_TASK_ID`     | The task you must deliver, e.g. `TASK-003`           |
+| `CURRENT_TASK_PRD`    | Path to the owning PRD, e.g. `.agent/prd/PRD-002.md` |
 | `CURRENT_TASK_VERIFY` | JSON array of per-repo verify commands (may be `[]`) |
 
 Read the task spec at `$AGENT_DIR/tasks/$CURRENT_TASK_ID.json` and the PRD
@@ -47,7 +47,11 @@ rather than inventing changes.
 ### 3. Implement
 
 Launch `coder` with the spec, the manifest path, the worktree paths, and the
-`verify` commands for each repo.
+`verify` commands for each repo. Also ask the coder to write a human-readable
+task report to `$AGENT_DIR/reports/$CURRENT_TASK_ID.md` covering: summary,
+files created/modified, verification steps and their results, and the status of
+each acceptance criterion. The coder owns that file; on a fix round it updates
+it to match the amended commit.
 
 ### 4. Review
 
@@ -55,7 +59,7 @@ Launch `reviewer` with the spec, the PRD, the manifest path, and the coder's
 report. Never pass the coder's chat history: the reviewer must judge the
 repository, not the argument.
 
-The reviewer writes `$AGENT_DIR/reports/$CURRENT_TASK_ID.review.json`.
+The reviewer writes `$AGENT_DIR/reports/TASK-$CURRENT_TASK_ID.md`.
 
 ### 5. Decide
 
@@ -86,10 +90,10 @@ A tag only counts when it is the literal text in your final message. Saying
 "emit the done promise" does nothing; the host scans the transcript for the tag
 itself. Put it on its own line as the last line you write.
 
-| Tag | Meaning |
-|---|---|
-| `<promise>TASK-{id}:DONE</promise>` | Reviewer returned PASS. Host will merge. |
-| `<promise>BLOCKED:reason</promise>` | You cannot deliver; the host aborts and stops. |
+| Tag                                  | Meaning                                         |
+| ------------------------------------ | ----------------------------------------------- |
+| `<promise>TASK-{id}:DONE</promise>`  | Reviewer returned PASS. Host will merge.        |
+| `<promise>BLOCKED:reason</promise>`  | You cannot deliver; the host aborts and stops.  |
 | `<promise>DECIDE:question</promise>` | A human must choose; the host aborts and stops. |
 
 For `TASK-003` after a PASS, your final message ends with exactly:

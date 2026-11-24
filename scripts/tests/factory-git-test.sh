@@ -279,6 +279,19 @@ else
   fail "finish prints bitbucket curl command for bitbucket remote"
 fi
 
+# test --push-only (prints push command but no PR creation)
+PUSH_ONLY_OUT=$(RALPH_HOST=1 "$FG" finish PRD-901 --push-only 2>&1)
+if printf '%s' "$PUSH_ONLY_OUT" | grep -q "push -u origin 'feat/demo-feature'"; then
+  pass "finish --push-only prints the push command"
+else
+  fail "finish --push-only prints the push command"
+fi
+if printf '%s' "$PUSH_ONLY_OUT" | grep -q "gh .* pr create"; then
+  fail "finish --push-only should NOT print gh pr create"
+else
+  pass "finish --push-only skips gh pr create"
+fi
+
 # --- validation ------------------------------------------------------------
 
 "$FG" prepare TASK-902 --repos api >/dev/null 2>&1
