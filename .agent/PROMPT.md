@@ -18,7 +18,7 @@ Read the task spec at `$AGENT_DIR/tasks/$CURRENT_TASK_ID.json` and the PRD
 before doing anything else. `$AGENT_DIR/STEERING.md` overrides the spec when it
 exists.
 
-## Sequence
+## Sequence — YOU MUST COMPLETE ALL STEPS IN ORDER
 
 ### 1. Research
 
@@ -28,6 +28,11 @@ PRD, and `PROJECT_ROOT`. Ask for the JSON brief described in its instructions.
 Subagents start in the same directory as you and do not inherit variables, so
 spell paths out. Never make a subagent guess a path.
 
+**After researcher returns, you MUST extract `affected_repos` from its JSON brief
+and proceed to Step 2. Do not stop after researcher.**
+
+**Do NOT read reference_patterns yourself.** The researcher already did that. Those are for the coder. Launch coder immediately.
+
 ### 2. Prepare the worktrees
 
 Take `affected_repos` from the brief and run:
@@ -36,13 +41,23 @@ Take `affected_repos` from the brief and run:
 "$FACTORY_SCRIPT" prepare "$CURRENT_TASK_ID" --repos repo-a,repo-b
 ```
 
-Read the manifest it prints, then pass the manifest path and the per-repo
-worktree paths to the coder and reviewer. Do not create worktrees by hand.
+Read the manifest it prints, then **immediately proceed to Step 3**.
+Do not output the researcher's final text as your own response.
+Do not read repository source files yourself. You do not write code.
+Pass the manifest path and the per-repo worktree paths to the coder and reviewer.
 
 If the brief reports no affected repos, do not prepare. Check the task's steps
-for what it actually requires; if it is a pure verification task with nothing to
-change, emit `<promise>BLOCKED:task needs no work but has no evidence path</promise>`
-rather than inventing changes.
+for what it actually requires:
+
+**Verification-only path** (task has `verify` commands but no file changes needed):
+1. Run the `verify` commands directly in `$PROJECT_ROOT` for each repo listed in the task's `verify` array.
+2. Collect stdout/stderr/exit codes as **evidence**.
+3. Write a brief evidence report to `$AGENT_DIR/reports/$CURRENT_TASK_ID.md` (summary, commands run, results, acceptance criteria status).
+4. Proceed directly to **Step 4 (Review)** with that evidence report — skip coder.
+5. The reviewer evaluates the evidence and writes the verdict.
+
+**Blocked path** (no affected repos AND no verify commands):
+Emit `<promise>BLOCKED:task needs no work and has no evidence path</promise>` rather than inventing changes.
 
 ### 3. Implement
 
@@ -55,9 +70,17 @@ it to match the amended commit.
 
 ### 4. Review
 
+**Standard path** (coder ran, worktree exists):
 Launch `reviewer` with the spec, the PRD, the manifest path, and the coder's
-report. Never pass the coder's chat history: the reviewer must judge the
-repository, not the argument.
+report.
+
+**Verification-only path** (no coder, no manifest, no worktree):
+Launch `reviewer` with the spec, the PRD, the evidence report from Step 2,
+and `manifest_path: "none"`. The reviewer evaluates whether the verification
+commands passed and acceptance criteria are met.
+
+Never pass the coder's chat history: the reviewer must judge the
+repository/evidence, not the argument.
 
 The reviewer writes `$AGENT_DIR/reports/TASK-$CURRENT_TASK_ID.md`.
 
@@ -74,6 +97,7 @@ Read the verdict file.
 ## Hard rules
 
 - **No code edits.** All file changes happen inside the `coder` subagent.
+- **No reading application code.** Only read task specs, PRDs, and `.manifest.json`. Never read files in `workspace/<repo>/src/` or `node_modules/`. Reading code is the researcher's and coder's job, not yours.
 - **No git verbs that move branches.** `prepare` and `status` are the only
   `factory-git.sh` verbs you may call. `merge`, `abort`, and `finish` belong to
   the host and will refuse you.

@@ -51,6 +51,9 @@ Report back exactly this JSON, nothing else:
 
 Rules:
 
+- Read `graphify-out/GRAPH_REPORT.md` and `schema.sql` **first** before running `grep`, `find`, or reading any file in `src/`.
+- Use `GRAPH_REPORT.md` to jump directly to the exact target files (maximum **6 file reads** per task).
+- Never read `graphify-out/graph.html`, `graphify-out/graph.json`, `graphify-out/cache/`, `node_modules/`, or lockfiles—`GRAPH_REPORT.md` already summarizes the dependency graph.
 - `affected_repos` is the list of repository names under the workspace that the
   task must change. Names are directory names, not paths. A task that only
   verifies something may legitimately list none — say so explicitly.

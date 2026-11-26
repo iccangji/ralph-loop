@@ -43,9 +43,36 @@ frontmatter_value() {
 }
 
 # Path to a task spec inside the repo.
+# Resolves both padded (TASK-003) and unpadded (TASK-3).
 # Usage: spec=$(task_spec_path TASK-003)
 task_spec_path() {
-  printf '%s/.agent/tasks/%s.json' "$SCRIPT_DIR" "$1"
+  local id="$1"
+  local tasks_dir="$SCRIPT_DIR/.agent/tasks"
+
+  if [ -f "$tasks_dir/$id.json" ]; then
+    printf '%s/%s.json' "$tasks_dir" "$id"
+    return 0
+  fi
+
+  local bare="${id#TASK-}"
+  if printf '%s' "$bare" | grep -Eq '^[0-9]+$'; then
+    local unpadded
+    unpadded=$(printf '%s' "$bare" | sed 's/^0*//')
+    [ -z "$unpadded" ] && unpadded="0"
+    if [ -f "$tasks_dir/TASK-${unpadded}.json" ]; then
+      printf '%s/TASK-%s.json' "$tasks_dir" "$unpadded"
+      return 0
+    fi
+
+    local padded
+    padded=$(printf '%03d' "$unpadded" 2>/dev/null || printf '%s' "$bare")
+    if [ -f "$tasks_dir/TASK-${padded}.json" ]; then
+      printf '%s/TASK-%s.json' "$tasks_dir" "$padded"
+      return 0
+    fi
+  fi
+
+  printf '%s/%s.json' "$tasks_dir" "$id"
 }
 
 # PRD file a task points at, resolved from its spec.

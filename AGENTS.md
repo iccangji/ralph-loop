@@ -143,6 +143,14 @@ because more than one PRD branch will then be in flight.
   The coder runs them before committing; the reviewer re-runs them before PASS.
   Omit it when the project has no useful check.
 
+## Context & Scoping Rules (Outer Orchestrator)
+- During `grilling` and `to-spec`, read **only**:
+  1. `graphify-out/GRAPH_REPORT.md` (architecture, module dependencies, and entry points)
+  2. `schema.sql` (exact database tables, columns, indexes, and foreign keys)
+  3. `docs/prds/*.md` and `tasks.json`
+- **Strictly forbidden:** Reading application source trees (`src/`, `app/`, `routes/`, `components/`) or invoking live database MCP tools during PRD interviews.
+- Populate `files_hint` in `tasks.json` using the exact module/file paths surfaced in `graphify-out/GRAPH_REPORT.md`.
+
 ## Branch and Worktree Model
 
 | Artifact               | Name                                              |

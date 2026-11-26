@@ -294,8 +294,10 @@ cmd_merge() {
     fi
 
     head_sha=$(git -C "$worktree" rev-parse HEAD 2>/dev/null)
-    v_base=$(jq -r --arg r "$name" '.reviewed[]? | select(.repo == $r) | .base_sha' "$verdict")
-    v_head=$(jq -r --arg r "$name" '.reviewed[]? | select(.repo == $r) | .head_sha' "$verdict")
+    # Accept both .reviewed (canonical) and .reviewed_repos (legacy LLM output),
+    # and both .repo and .name for the repo identifier
+    v_base=$(jq -r --arg r "$name" '(.reviewed // .reviewed_repos // [])[]? | select((.repo // .name) == $r) | .base_sha' "$verdict")
+    v_head=$(jq -r --arg r "$name" '(.reviewed // .reviewed_repos // [])[]? | select((.repo // .name) == $r) | .head_sha' "$verdict")
     if [ -z "$v_head" ] || [ "$v_head" != "$head_sha" ] || [ "$v_base" != "$base_sha" ]; then
       log_error "$name: verdict does not match the current commits."
       log_error "  reviewed base=${v_base:-none} head=${v_head:-none}"

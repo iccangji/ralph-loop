@@ -5,9 +5,15 @@
 
 TASKS_FILE="$SCRIPT_DIR/.agent/tasks.json"
 
-# Strip the TASK- prefix so "TASK-001" and "001" match the same entry.
+# Strip the TASK- prefix and any leading zeros so "TASK-001", "TASK-1", and "1" match.
 bare_task_id() {
-  printf '%s' "${1#TASK-}"
+  local id="${1#TASK-}"
+  # If numeric, strip leading zeros, preserving a lone 0
+  if printf '%s' "$id" | grep -Eq '^[0-9]+$'; then
+    id=$(printf '%s' "$id" | sed 's/^0*//')
+    [ -z "$id" ] && id="0"
+  fi
+  printf '%s' "$id"
 }
 
 # Return success when at least one task exists and every task has status: "completed".
@@ -51,7 +57,22 @@ set_task_in_progress() {
 
   local updated
   updated=$(jq --arg id "$id" \
-    'map(if (.id | tostring | ltrimstr("TASK-")) == $id then .status = "in_progress" else . end)' \
+    'map(if (.id | tostring | ltrimstr("TASK-") | (if test("^[0-9]+$") then gsub("^0*"; "") | (if length == 0 then "0" else . end) else . end)) == $id then .status = "in_progress" else . end)' \
+    "$TASKS_FILE" 2>/dev/null) || return 0
+  [ -n "$updated" ] || return 0
+  printf '%s\n' "$updated" > "$TASKS_FILE"
+}
+
+# Reset a task back to pending (for retry after failed iteration)
+# Usage: set_task_pending <task-id>
+set_task_pending() {
+  local id
+  id=$(bare_task_id "$1")
+  [ -n "$id" ] || return 0
+
+  local updated
+  updated=$(jq --arg id "$id" \
+    'map(if (.id | tostring | ltrimstr("TASK-") | (if test("^[0-9]+$") then gsub("^0*"; "") | (if length == 0 then "0" else . end) else . end)) == $id then .status = "pending" else . end)' \
     "$TASKS_FILE" 2>/dev/null) || return 0
   [ -n "$updated" ] || return 0
   printf '%s\n' "$updated" > "$TASKS_FILE"

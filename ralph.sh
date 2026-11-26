@@ -298,9 +298,10 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   # Extract final summary before removing files
   FINAL_SUMMARY=$(extract_final_summary "$OUTPUT_FILE")
 
-  # Tag detection reads the raw transcript too, so a tag is never missed when
-  # the preview stream and the final summary disagree.
-  TAG_OUTPUT=$(printf '%s\n%s\n%s' "$OUTPUT" "$FINAL_SUMMARY" "$(cat "$HISTORY_FILE" 2>/dev/null)")
+  # Tag detection: inspect the agent's text stream and final summary.
+  # Do not include raw JSON history file; tool execution outputs (e.g. reading
+  # PROMPT.md) contain doc examples of promise tags that trigger false positives.
+  TAG_OUTPUT=$(printf '%s\n%s' "$OUTPUT" "$FINAL_SUMMARY")
 
   rm -f "$FULL_OUTPUT_FILE"
   FULL_OUTPUT_FILE=""  # Clear after removal
@@ -454,6 +455,8 @@ $(cat $SCRIPT_DIR/.agent/PROMPT.md)"
   if { [ -z "$COMPLETED_TASK_IDS" ] && ! has_complete_tag "$TAG_OUTPUT"; } || [ "$MERGE_FAILED" = 1 ]; then
     CONSECUTIVE_FAILURES=$((CONSECUTIVE_FAILURES + 1))
     RALPH_HOST=1 "$FACTORY_SCRIPT" abort "$TASK_ID" >/dev/null 2>&1 || true
+    # Reset task status so it can be retried next iteration
+    set_task_pending "$TASK_ID"
     echo -e "${RD}  ⚠️  Iteration $i completed without completing a task${R} (failures: $CONSECUTIVE_FAILURES/${MAX_RETRIES})"
 
     if [ "$NO_ROLLBACK" != true ]; then

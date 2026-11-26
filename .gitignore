@@ -17,3 +17,4 @@ workspace/
 # Ralph temp state (agents are tracked, the per-run skills link is not)
 .opencode/skills
 nohup.out
+graphify-out/
